@@ -1,6 +1,13 @@
+use crate::AddressLayout;
+
 crate::address_type::address_type!(VirtualAddress);
 
 impl VirtualAddress {
+    pub fn canonical<L: AddressLayout>(raw: u64) -> Option<Self> {
+        let address = Self::new(raw);
+        L::is_canonical(address).then_some(address)
+    }
+
     pub fn from_pointer<T>(pointer: *const T) -> Self {
         Self::new(pointer.addr() as u64)
     }

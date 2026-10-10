@@ -1,4 +1,13 @@
+use crate::AddressLayout;
+use crate::layout::fits_in_bits;
+
 crate::address_type::address_type!(PhysicalAddress);
+
+impl PhysicalAddress {
+    pub fn within<L: AddressLayout>(raw: u64) -> Option<Self> {
+        fits_in_bits(raw, L::PHYSICAL_ADDRESS_BIT_COUNT).then_some(Self::new(raw))
+    }
+}
 
 #[cfg(test)]
 mod tests {
