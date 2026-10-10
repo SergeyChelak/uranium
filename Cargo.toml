@@ -8,6 +8,7 @@ members = [
     "hal/aarch64",
     "kernel/main",
     "boot/uefi",
+    "boot/firmware",
 ]
 default-members = ["xtask"]
 
