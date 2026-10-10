@@ -1,0 +1,15 @@
+[package]
+name = "hal"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.uranium]
+layer = "hal/contract"
+
+[dependencies]
+address = { path = "../../lib/address" }
+
+[lints]
+workspace = true
