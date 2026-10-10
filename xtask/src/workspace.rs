@@ -1,14 +1,28 @@
-use std::path::PathBuf;
-
 use anyhow::Context;
-use cargo_metadata::camino::Utf8Path;
-use cargo_metadata::{Metadata, MetadataCommand};
+use cargo_metadata::{DependencyKind, Metadata, MetadataCommand};
 
-pub struct Package {
-    pub name: String,
-    pub directory: PathBuf,
+use crate::layer::Layer;
+
+#[derive(Debug)]
+pub struct Declaration {
+    pub layer: Layer,
 }
 
+#[derive(Debug)]
+pub struct Dependency {
+    pub name: String,
+    pub development: bool,
+}
+
+#[derive(Debug)]
+pub struct Package {
+    pub name: String,
+    pub member: bool,
+    pub declaration: Option<Declaration>,
+    pub dependencies: Vec<Dependency>,
+}
+
+#[derive(Debug)]
 pub struct Workspace {
     pub packages: Vec<Package>,
 }
@@ -23,55 +37,101 @@ impl Workspace {
 
     pub fn from_metadata(metadata: &Metadata) -> anyhow::Result<Workspace> {
         let packages = metadata
-            .workspace_packages()
-            .into_iter()
+            .packages
+            .iter()
             .map(|package| {
                 Ok(Package {
                     name: package.name.to_string(),
-                    directory: directory_of(package, &metadata.workspace_root)?,
+                    member: metadata.workspace_members.contains(&package.id),
+                    declaration: declaration_of(package)?,
+                    dependencies: dependencies_of(package),
                 })
             })
             .collect::<anyhow::Result<Vec<Package>>>()?;
         Ok(Workspace { packages })
     }
+
+    pub fn package(&self, name: &str) -> Option<&Package> {
+        self.packages.iter().find(|package| package.name == name)
+    }
 }
 
-fn directory_of(package: &cargo_metadata::Package, root: &Utf8Path) -> anyhow::Result<PathBuf> {
-    let directory = package
-        .manifest_path
-        .parent()
-        .with_context(|| format!("manifest {} has no parent directory", package.manifest_path))?;
-    let relative = directory.strip_prefix(root).with_context(|| {
+fn declaration_of(package: &cargo_metadata::Package) -> anyhow::Result<Option<Declaration>> {
+    let Some(table) = package.metadata.get("uranium") else {
+        return Ok(None);
+    };
+    let layer_name = table
+        .get("layer")
+        .and_then(|value| value.as_str())
+        .with_context(|| {
+            format!(
+                "package {} declares no layer under [package.metadata.uranium]",
+                package.name
+            )
+        })?;
+    let layer = Layer::parse(layer_name).with_context(|| {
         format!(
-            "package {} lives outside the workspace root {root}",
+            "package {} declares unknown layer {layer_name}",
             package.name
         )
     })?;
-    Ok(relative.as_std_path().to_path_buf())
+    Ok(Some(Declaration { layer }))
+}
+
+fn dependencies_of(package: &cargo_metadata::Package) -> Vec<Dependency> {
+    package
+        .dependencies
+        .iter()
+        .map(|dependency| Dependency {
+            name: dependency.name.clone(),
+            development: dependency.kind == DependencyKind::Development,
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
-
     use cargo_metadata::{Metadata, MetadataCommand};
 
     use super::Workspace;
+    use crate::layer::Layer;
 
-    fn package_json(name: &str, manifest_path: &str) -> String {
+    struct Spec<'a> {
+        name: &'a str,
+        member: bool,
+        uranium: Option<&'a str>,
+        dependencies: &'a [(&'a str, &'a str)],
+    }
+
+    const NORMAL: &str = "null";
+    const DEVELOPMENT: &str = "\"dev\"";
+
+    fn package_json(spec: &Spec<'_>) -> String {
+        let dependencies: Vec<String> = spec
+            .dependencies
+            .iter()
+            .map(|(name, kind)| {
+                format!(
+                    r#"{{"name":"{name}","req":"*","kind":{kind},"optional":false,"uses_default_features":true,"features":[]}}"#
+                )
+            })
+            .collect();
+        let metadata = spec.uranium.map_or("null".to_string(), |table| {
+            format!(r#"{{"uranium":{table}}}"#)
+        });
         format!(
-            r#"{{"name":"{name}","version":"0.1.0","id":"{name} 0.1.0","dependencies":[],"targets":[],"features":{{}},"manifest_path":"{manifest_path}"}}"#
+            r#"{{"name":"{0}","version":"0.1.0","id":"{0} 0.1.0","dependencies":[{1}],"targets":[],"features":{{}},"manifest_path":"/root/{0}/Cargo.toml","metadata":{metadata}}}"#,
+            spec.name,
+            dependencies.join(",")
         )
     }
 
-    fn metadata(packages: &[(&str, &str)], members: &[&str]) -> Metadata {
-        let packages: Vec<String> = packages
+    fn metadata(specs: &[Spec<'_>]) -> Metadata {
+        let packages: Vec<String> = specs.iter().map(package_json).collect();
+        let members: Vec<String> = specs
             .iter()
-            .map(|(name, manifest_path)| package_json(name, manifest_path))
-            .collect();
-        let members: Vec<String> = members
-            .iter()
-            .map(|name| format!(r#""{name} 0.1.0""#))
+            .filter(|spec| spec.member)
+            .map(|spec| format!(r#""{} 0.1.0""#, spec.name))
             .collect();
         let json = format!(
             r#"{{"packages":[{}],"workspace_members":[{}],"resolve":null,"workspace_root":"/root","target_directory":"/root/target","version":1}}"#,
@@ -81,41 +141,123 @@ mod tests {
         MetadataCommand::parse(json).unwrap()
     }
 
-    #[test]
-    fn reads_workspace_packages_with_their_directories() {
-        let metadata = metadata(
-            &[
-                ("address", "/root/lib/address/Cargo.toml"),
-                ("xtask", "/root/xtask/Cargo.toml"),
-            ],
-            &["address", "xtask"],
-        );
+    fn workspace(specs: &[Spec<'_>]) -> anyhow::Result<Workspace> {
+        Workspace::from_metadata(&metadata(specs))
+    }
 
-        let workspace = Workspace::from_metadata(&metadata).unwrap();
+    #[test]
+    fn reads_declared_layer() {
+        let workspace = workspace(&[Spec {
+            name: "address",
+            member: true,
+            uranium: Some(r#"{"layer":"lib"}"#),
+            dependencies: &[],
+        }])
+        .unwrap();
+
+        let package = &workspace.packages[0];
+        assert_eq!(package.name, "address");
+        assert!(package.member);
+        assert_eq!(package.declaration.as_ref().unwrap().layer, Layer::Library);
+    }
+
+    #[test]
+    fn package_without_uranium_table_is_foreign() {
+        let workspace = workspace(&[Spec {
+            name: "serde",
+            member: false,
+            uranium: None,
+            dependencies: &[],
+        }])
+        .unwrap();
+
+        let package = &workspace.packages[0];
+        assert!(!package.member);
+        assert!(package.declaration.is_none());
+    }
+
+    #[test]
+    fn missing_layer_is_an_error() {
+        let error = workspace(&[Spec {
+            name: "address",
+            member: true,
+            uranium: Some("{}"),
+            dependencies: &[],
+        }])
+        .unwrap_err();
+
+        assert!(error.to_string().contains("address"));
+        assert!(error.to_string().contains("layer"));
+    }
+
+    #[test]
+    fn unknown_layer_name_is_an_error() {
+        let error = workspace(&[Spec {
+            name: "address",
+            member: true,
+            uranium: Some(r#"{"layer":"kernel/magic"}"#),
+            dependencies: &[],
+        }])
+        .unwrap_err();
+
+        assert!(error.to_string().contains("kernel/magic"));
+    }
+
+    #[test]
+    fn reads_dependencies_with_their_kind() {
+        let workspace = workspace(&[
+            Spec {
+                name: "address",
+                member: true,
+                uranium: Some(r#"{"layer":"lib"}"#),
+                dependencies: &[("hal", NORMAL), ("serde", DEVELOPMENT)],
+            },
+            Spec {
+                name: "hal",
+                member: true,
+                uranium: Some(r#"{"layer":"hal/contract"}"#),
+                dependencies: &[],
+            },
+            Spec {
+                name: "serde",
+                member: false,
+                uranium: None,
+                dependencies: &[],
+            },
+        ])
+        .unwrap();
+
+        let dependencies = &workspace.packages[0].dependencies;
+        assert_eq!(dependencies.len(), 2);
+        assert_eq!(dependencies[0].name, "hal");
+        assert!(!dependencies[0].development);
+        assert_eq!(dependencies[1].name, "serde");
+        assert!(dependencies[1].development);
+    }
+
+    #[test]
+    fn keeps_every_package_of_the_graph() {
+        let workspace = workspace(&[
+            Spec {
+                name: "xtask",
+                member: true,
+                uranium: Some(r#"{"layer":"tooling"}"#),
+                dependencies: &[("anyhow", NORMAL)],
+            },
+            Spec {
+                name: "anyhow",
+                member: false,
+                uranium: None,
+                dependencies: &[],
+            },
+        ])
+        .unwrap();
 
         let names: Vec<&str> = workspace
             .packages
             .iter()
             .map(|package| package.name.as_str())
             .collect();
-        assert_eq!(names, ["address", "xtask"]);
-        assert_eq!(workspace.packages[0].directory, Path::new("lib/address"));
-        assert_eq!(workspace.packages[1].directory, Path::new("xtask"));
-    }
-
-    #[test]
-    fn skips_packages_that_are_not_workspace_members() {
-        let metadata = metadata(
-            &[
-                ("xtask", "/root/xtask/Cargo.toml"),
-                ("anyhow", "/registry/anyhow-1.0.0/Cargo.toml"),
-            ],
-            &["xtask"],
-        );
-
-        let workspace = Workspace::from_metadata(&metadata).unwrap();
-
-        assert_eq!(workspace.packages.len(), 1);
-        assert_eq!(workspace.packages[0].name, "xtask");
+        assert_eq!(names, ["xtask", "anyhow"]);
     }
 }
