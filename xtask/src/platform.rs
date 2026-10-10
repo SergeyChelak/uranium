@@ -54,6 +54,22 @@ impl Platform {
             Platform::Aarch64 => "BOOTAA64.EFI",
         }
     }
+
+    pub fn qemu_system(self) -> &'static str {
+        match self {
+            Platform::X86_64 => "qemu-system-x86_64",
+            Platform::Aarch64 => "qemu-system-aarch64",
+        }
+    }
+
+    /// Prefix of the canonical names of the QEMU machine this platform runs on,
+    /// the form in which firmware descriptors spell their machine patterns
+    pub fn qemu_machine_family(self) -> &'static str {
+        match self {
+            Platform::X86_64 => "pc-q35-",
+            Platform::Aarch64 => "virt-",
+        }
+    }
 }
 
 pub fn platforms_from(
@@ -86,6 +102,14 @@ mod tests {
     #[test]
     fn all_lists_x86_64_first() {
         assert_eq!(Platform::ALL, [Platform::X86_64, Platform::Aarch64]);
+    }
+
+    #[test]
+    fn qemu_names_follow_the_platform() {
+        assert_eq!(Platform::X86_64.qemu_system(), "qemu-system-x86_64");
+        assert_eq!(Platform::Aarch64.qemu_system(), "qemu-system-aarch64");
+        assert_eq!(Platform::X86_64.qemu_machine_family(), "pc-q35-");
+        assert_eq!(Platform::Aarch64.qemu_machine_family(), "virt-");
     }
 
     #[test]

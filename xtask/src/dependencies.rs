@@ -22,27 +22,6 @@ impl fmt::Display for Violation {
     }
 }
 
-pub fn run(mut arguments: lexopt::Parser) -> anyhow::Result<()> {
-    if let Some(argument) = arguments.next()? {
-        return Err(argument.unexpected().into());
-    }
-    let workspace = Workspace::load()?;
-    let found = violations(&workspace)?;
-    for violation in &found {
-        eprintln!("{violation}");
-    }
-    if !found.is_empty() {
-        bail!("{}", counted(found.len(), "dependency violation"));
-    }
-    let members = workspace
-        .packages
-        .iter()
-        .filter(|package| package.member)
-        .count();
-    println!("dependencies: ok, {}", counted(members, "package"));
-    Ok(())
-}
-
 pub fn violations(workspace: &Workspace) -> anyhow::Result<Vec<Violation>> {
     let mut found = Vec::new();
     for package in &workspace.packages {
@@ -153,14 +132,6 @@ fn listed(layers: &[Layer]) -> String {
         Some((last, [])) => (*last).to_string(),
         Some((last, rest)) => format!("{} and {last}", rest.join(", ")),
         None => String::new(),
-    }
-}
-
-fn counted(count: usize, noun: &str) -> String {
-    if count == 1 {
-        format!("1 {noun}")
-    } else {
-        format!("{count} {noun}s")
     }
 }
 

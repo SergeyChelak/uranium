@@ -1,29 +1,17 @@
-mod build;
 mod cargo;
-mod check;
-mod clippy;
+mod commands;
 mod dependencies;
 mod esp;
-mod fmt;
+mod firmware;
 mod layer;
 mod platform;
+mod qemu;
 mod targets;
 mod workspace;
 
 use std::process::ExitCode;
 
 use platform::Platform;
-
-type Command = fn(lexopt::Parser) -> anyhow::Result<()>;
-
-const COMMANDS: &[(&str, Command)] = &[
-    ("fmt", fmt::run),
-    ("clippy", clippy::run),
-    ("dependencies", dependencies::run),
-    ("check", check::run),
-    ("build", build::run),
-    ("esp", esp::run),
-];
 
 fn main() -> ExitCode {
     let mut arguments = std::env::args_os().skip(1);
@@ -32,7 +20,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
     let name = name.to_string_lossy();
-    let Some(command) = find_command(&name) else {
+    let Some(command) = commands::find(&name) else {
         eprintln!("xtask: unknown command {name}");
         return ExitCode::FAILURE;
     };
@@ -45,16 +33,9 @@ fn main() -> ExitCode {
     }
 }
 
-fn find_command(name: &str) -> Option<Command> {
-    COMMANDS
-        .iter()
-        .find(|(command_name, _)| *command_name == name)
-        .map(|(_, command)| *command)
-}
-
 fn usage() -> String {
     let platforms = Platform::ALL.map(Platform::name).join("|");
-    let commands: String = COMMANDS
+    let commands: String = commands::COMMANDS
         .iter()
         .map(|(name, _)| format!("  {name}\n"))
         .collect();
@@ -65,15 +46,10 @@ fn usage() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{find_command, usage};
+    use super::usage;
 
     #[test]
     fn usage_offers_every_platform_and_all() {
         assert!(usage().contains("--platform x86_64|aarch64|all"));
-    }
-
-    #[test]
-    fn unknown_command_is_not_found() {
-        assert!(find_command("frobnicate").is_none());
     }
 }

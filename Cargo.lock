@@ -235,6 +235,8 @@ dependencies = [
  "anyhow",
  "cargo_metadata",
  "lexopt",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 use std::ffi::OsString;
 
-use crate::{clippy, dependencies, fmt};
+use super::{clippy, dependencies, fmt};
 
 pub fn run(arguments: lexopt::Parser) -> anyhow::Result<()> {
     fmt::run(no_arguments())?;
