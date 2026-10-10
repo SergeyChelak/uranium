@@ -8,7 +8,7 @@ use crate::ucs2::{CHUNK_LENGTH, Encoder};
 type OutputStringFunction =
     unsafe extern "efiapi" fn(*const SimpleTextOutputProtocol, *const u16) -> Status;
 
-// UEFI 2.11, 12.4.1; declared up to OutputString, the last field the loader calls.
+// UEFI 2.11, 12.4.1; declared up to OutputString, the last field the loader calls
 #[repr(C)]
 pub struct SimpleTextOutputProtocol {
     reset: UnusedFunctionPointer,
@@ -16,14 +16,14 @@ pub struct SimpleTextOutputProtocol {
 }
 
 impl SimpleTextOutputProtocol {
-    /// Writes the text chunk by chunk and stops at the first error.
+    /// Writes the text chunk by chunk and stops at the first error
     pub fn write_str(&self, text: &str) -> Result<(), Status> {
         let mut encoder = Encoder::new(text);
         let mut buffer = [0; CHUNK_LENGTH + 1];
         while encoder.next_chunk(&mut buffer).is_some() {
             // SAFETY: `self` lives in a firmware table that is valid while boot
             // services run, and `buffer` is a null-terminated string that
-            // outlives the call.
+            // outlives the call
             unsafe { (self.output_string)(self, buffer.as_ptr()) }.into_result()?;
         }
         Ok(())

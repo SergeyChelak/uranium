@@ -1,6 +1,6 @@
 use core::fmt;
 
-// UEFI 2.11, Appendix D: error codes have the highest bit set.
+// UEFI 2.11, Appendix D: error codes have the highest bit set
 const ERROR_BIT: usize = 1 << (usize::BITS - 1);
 
 #[derive(Clone, Copy, PartialEq, Eq)]

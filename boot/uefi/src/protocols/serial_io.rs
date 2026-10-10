@@ -8,7 +8,7 @@ use crate::{Guid, Protocol, Status};
 type WriteFunction =
     unsafe extern "efiapi" fn(*const SerialIoProtocol, *mut usize, *const c_void) -> Status;
 
-// UEFI 2.11, 12.8.1; declared up to Write, the last field the loader calls.
+// UEFI 2.11, 12.8.1; declared up to Write, the last field the loader calls
 #[repr(C)]
 pub struct SerialIoProtocol {
     revision: u32,
@@ -19,7 +19,7 @@ pub struct SerialIoProtocol {
     write: WriteFunction,
 }
 
-// SAFETY: this GUID identifies EFI_SERIAL_IO_PROTOCOL, the structure declared above.
+// SAFETY: this GUID identifies EFI_SERIAL_IO_PROTOCOL, the structure declared above
 unsafe impl Protocol for SerialIoProtocol {
     // UEFI 2.11, 12.8.1
     const GUID: Guid = Guid::new(
@@ -31,12 +31,12 @@ unsafe impl Protocol for SerialIoProtocol {
 }
 
 impl SerialIoProtocol {
-    /// Sends the bytes and returns how many the device took.
+    /// Sends the bytes and returns how many the device took
     pub fn write(&self, bytes: &[u8]) -> Result<usize, Status> {
         let mut size = bytes.len();
         // SAFETY: `self` lives in a firmware protocol instance that is valid
         // while boot services run; `size` is the length of `bytes`, and both
-        // outlive the call.
+        // outlive the call
         unsafe { (self.write)(self, &mut size, bytes.as_ptr().cast()) }.into_result()?;
         Ok(size)
     }
@@ -57,9 +57,9 @@ mod tests {
         size: *mut usize,
         buffer: *const c_void,
     ) -> Status {
-        // SAFETY: the test passes a live size.
+        // SAFETY: the test passes a live size
         let length = unsafe { *size };
-        // SAFETY: the test passes a buffer of `length` bytes.
+        // SAFETY: the test passes a buffer of `length` bytes
         let bytes = unsafe { slice::from_raw_parts(buffer.cast::<u8>(), length) };
         if bytes == b"uranium" {
             Status::SUCCESS
@@ -73,20 +73,20 @@ mod tests {
         size: *mut usize,
         _buffer: *const c_void,
     ) -> Status {
-        // SAFETY: the test passes a live size.
+        // SAFETY: the test passes a live size
         unsafe { *size /= 2 };
         Status::SUCCESS
     }
 
     fn protocol_with(write: WriteFunction) -> SerialIoProtocol {
         let mut protocol = MaybeUninit::<SerialIoProtocol>::zeroed();
-        // SAFETY: the pointer comes from `MaybeUninit`, so the place exists.
+        // SAFETY: the pointer comes from `MaybeUninit`, so the place exists
         let slot = unsafe { &raw mut (*protocol.as_mut_ptr()).write };
-        // SAFETY: `slot` points inside `protocol`.
+        // SAFETY: `slot` points inside `protocol`
         unsafe { slot.write(write) };
         // SAFETY: every other field is an integer or a nullable raw pointer,
         // for which all-zero bytes are valid; the one function pointer was
-        // written above.
+        // written above
         unsafe { protocol.assume_init() }
     }
 

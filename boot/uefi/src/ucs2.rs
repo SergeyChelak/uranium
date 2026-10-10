@@ -1,6 +1,6 @@
 use core::str::Chars;
 
-/// Code units per chunk handed to the firmware, not counting the terminator.
+/// Code units per chunk handed to the firmware, not counting the terminator
 pub(crate) const CHUNK_LENGTH: usize = 128;
 
 const CARRIAGE_RETURN: u16 = b'\r' as u16;
@@ -10,7 +10,7 @@ const REPLACEMENT: u16 = b'?' as u16;
 /// Turns text into null-terminated UCS-2 chunks for the text console:
 /// a line feed becomes carriage return plus line feed unless the carriage
 /// return is already there, and characters outside the basic plane, which
-/// UCS-2 cannot represent, become a question mark.
+/// UCS-2 cannot represent, become a question mark
 pub(crate) struct Encoder<'a> {
     text: Chars<'a>,
     pending: Option<u16>,
@@ -28,7 +28,7 @@ impl<'a> Encoder<'a> {
 
     /// Fills `buffer` with the next chunk and a terminating zero. Returns the
     /// number of code units before the terminator, or `None` once the text
-    /// is exhausted.
+    /// is exhausted
     pub(crate) fn next_chunk(&mut self, buffer: &mut [u16; CHUNK_LENGTH + 1]) -> Option<usize> {
         let mut length = 0;
         while length < CHUNK_LENGTH {

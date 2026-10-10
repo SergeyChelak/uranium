@@ -22,7 +22,7 @@ pub use boot_services::BootServices;
 pub use guid::Guid;
 pub use handle::Handle;
 pub use protocols::{Protocol, SerialIoProtocol, SimpleTextOutputProtocol};
-pub use runtime_services::RuntimeServices;
+pub use runtime_services::{ResetKind, RuntimeServices};
 pub use status::Status;
 pub use system_table::SystemTable;
 pub use table_header::TableHeader;
