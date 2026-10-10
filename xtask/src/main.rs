@@ -1,4 +1,7 @@
+mod dependencies;
+mod layer;
 mod platform;
+mod workspace;
 
 use std::process::ExitCode;
 
@@ -6,7 +9,7 @@ use platform::Platform;
 
 type Command = fn(lexopt::Parser) -> anyhow::Result<()>;
 
-const COMMANDS: &[(&str, Command)] = &[];
+const COMMANDS: &[(&str, Command)] = &[("dependencies", dependencies::run)];
 
 fn main() -> ExitCode {
     let mut arguments = std::env::args_os().skip(1);
