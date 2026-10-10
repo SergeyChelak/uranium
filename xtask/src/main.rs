@@ -1,6 +1,11 @@
+mod cargo;
+mod check;
+mod clippy;
 mod dependencies;
+mod fmt;
 mod layer;
 mod platform;
+mod targets;
 mod workspace;
 
 use std::process::ExitCode;
@@ -9,7 +14,12 @@ use platform::Platform;
 
 type Command = fn(lexopt::Parser) -> anyhow::Result<()>;
 
-const COMMANDS: &[(&str, Command)] = &[("dependencies", dependencies::run)];
+const COMMANDS: &[(&str, Command)] = &[
+    ("fmt", fmt::run),
+    ("clippy", clippy::run),
+    ("dependencies", dependencies::run),
+    ("check", check::run),
+];
 
 fn main() -> ExitCode {
     let mut arguments = std::env::args_os().skip(1);
@@ -60,6 +70,6 @@ mod tests {
 
     #[test]
     fn unknown_command_is_not_found() {
-        assert!(find_command("check").is_none());
+        assert!(find_command("frobnicate").is_none());
     }
 }

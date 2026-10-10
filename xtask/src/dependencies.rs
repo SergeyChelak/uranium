@@ -166,6 +166,8 @@ fn counted(count: usize, noun: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use super::violations;
     use crate::layer::Layer;
     use crate::workspace::{Declaration, Dependency, Package, Workspace};
@@ -176,6 +178,7 @@ mod tests {
             member: true,
             declaration: Some(Declaration {
                 layer: Layer::parse(layer).unwrap(),
+                architecture: None,
             }),
             dependencies: dependencies
                 .iter()
@@ -207,11 +210,14 @@ mod tests {
     }
 
     fn messages(packages: Vec<Package>) -> Vec<String> {
-        violations(&Workspace { packages })
-            .unwrap()
-            .iter()
-            .map(ToString::to_string)
-            .collect()
+        violations(&Workspace {
+            root: PathBuf::from("/root"),
+            packages,
+        })
+        .unwrap()
+        .iter()
+        .map(ToString::to_string)
+        .collect()
     }
 
     #[test]
@@ -363,6 +369,7 @@ mod tests {
         let mut undeclared = foreign("address");
         undeclared.member = true;
         let error = violations(&Workspace {
+            root: PathBuf::from("/root"),
             packages: vec![undeclared],
         })
         .unwrap_err();
@@ -372,6 +379,7 @@ mod tests {
     #[test]
     fn unknown_dependency_is_an_error() {
         let error = violations(&Workspace {
+            root: PathBuf::from("/root"),
             packages: vec![package("trap", "kernel/interface", &["ghost"])],
         })
         .unwrap_err();

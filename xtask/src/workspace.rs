@@ -1,11 +1,15 @@
+use std::path::PathBuf;
+
 use anyhow::Context;
 use cargo_metadata::{DependencyKind, Metadata, MetadataCommand};
 
 use crate::layer::Layer;
+use crate::platform::Platform;
 
 #[derive(Debug)]
 pub struct Declaration {
     pub layer: Layer,
+    pub architecture: Option<Platform>,
 }
 
 #[derive(Debug)]
@@ -24,6 +28,7 @@ pub struct Package {
 
 #[derive(Debug)]
 pub struct Workspace {
+    pub root: PathBuf,
     pub packages: Vec<Package>,
 }
 
@@ -48,7 +53,10 @@ impl Workspace {
                 })
             })
             .collect::<anyhow::Result<Vec<Package>>>()?;
-        Ok(Workspace { packages })
+        Ok(Workspace {
+            root: metadata.workspace_root.as_std_path().to_path_buf(),
+            packages,
+        })
     }
 
     pub fn package(&self, name: &str) -> Option<&Package> {
@@ -75,7 +83,19 @@ fn declaration_of(package: &cargo_metadata::Package) -> anyhow::Result<Option<De
             package.name
         )
     })?;
-    Ok(Some(Declaration { layer }))
+    let architecture = match table.get("architecture").and_then(|value| value.as_str()) {
+        None => None,
+        Some(name) => Some(Platform::parse(name).with_context(|| {
+            format!(
+                "package {} declares unknown architecture {name}",
+                package.name
+            )
+        })?),
+    };
+    Ok(Some(Declaration {
+        layer,
+        architecture,
+    }))
 }
 
 fn dependencies_of(package: &cargo_metadata::Package) -> Vec<Dependency> {
@@ -91,10 +111,13 @@ fn dependencies_of(package: &cargo_metadata::Package) -> Vec<Dependency> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use cargo_metadata::{Metadata, MetadataCommand};
 
     use super::Workspace;
     use crate::layer::Layer;
+    use crate::platform::Platform;
 
     struct Spec<'a> {
         name: &'a str,
@@ -159,6 +182,55 @@ mod tests {
         assert_eq!(package.name, "address");
         assert!(package.member);
         assert_eq!(package.declaration.as_ref().unwrap().layer, Layer::Library);
+    }
+
+    #[test]
+    fn reads_workspace_root() {
+        let workspace = workspace(&[]).unwrap();
+        assert_eq!(workspace.root, Path::new("/root"));
+    }
+
+    #[test]
+    fn reads_declared_architecture() {
+        let workspace = workspace(&[Spec {
+            name: "hal-x86_64",
+            member: true,
+            uranium: Some(r#"{"layer":"hal/implementation","architecture":"x86_64"}"#),
+            dependencies: &[],
+        }])
+        .unwrap();
+
+        let declaration = workspace.packages[0].declaration.as_ref().unwrap();
+        assert_eq!(declaration.layer, Layer::HalImplementation);
+        assert_eq!(declaration.architecture, Some(Platform::X86_64));
+    }
+
+    #[test]
+    fn declaration_without_architecture_is_for_every_platform() {
+        let workspace = workspace(&[Spec {
+            name: "address",
+            member: true,
+            uranium: Some(r#"{"layer":"lib"}"#),
+            dependencies: &[],
+        }])
+        .unwrap();
+
+        let declaration = workspace.packages[0].declaration.as_ref().unwrap();
+        assert_eq!(declaration.architecture, None);
+    }
+
+    #[test]
+    fn unknown_architecture_is_an_error() {
+        let error = workspace(&[Spec {
+            name: "hal-riscv64",
+            member: true,
+            uranium: Some(r#"{"layer":"hal/implementation","architecture":"riscv64"}"#),
+            dependencies: &[],
+        }])
+        .unwrap_err();
+
+        assert!(error.to_string().contains("hal-riscv64"));
+        assert!(error.to_string().contains("riscv64"));
     }
 
     #[test]
