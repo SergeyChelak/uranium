@@ -1,7 +1,7 @@
 use core::mem::offset_of;
 
 use crate::firmware_pointer::{FirmwarePointer, UnusedFirmwarePointer};
-use crate::{BootServices, Handle, RuntimeServices, TableHeader};
+use crate::{BootServices, Handle, RuntimeServices, SimpleTextOutputProtocol, TableHeader};
 
 /// The table the firmware hands to `efi_main`. A `&SystemTable` may exist
 /// only while that pointer is valid: it was created from the pointer the
@@ -15,7 +15,7 @@ pub struct SystemTable {
     console_in_handle: Option<Handle>,
     console_in: UnusedFirmwarePointer,
     console_out_handle: Option<Handle>,
-    console_out: UnusedFirmwarePointer,
+    console_out: FirmwarePointer<SimpleTextOutputProtocol>,
     standard_error_handle: Option<Handle>,
     standard_error: UnusedFirmwarePointer,
     runtime_services: FirmwarePointer<RuntimeServices>,
@@ -23,16 +23,25 @@ pub struct SystemTable {
 }
 
 impl SystemTable {
+    /// The active console, or `None` when the firmware has none.
+    pub fn console_out(&self) -> Option<&SimpleTextOutputProtocol> {
+        // SAFETY: a `&SystemTable` exists only while the system table is valid,
+        // so the console protocol it points to is valid as well.
+        unsafe { self.console_out.get() }
+    }
+
     pub fn boot_services(&self) -> &BootServices {
         // SAFETY: a `&SystemTable` exists only while boot services run, so the
         // system table and the boot services table it points to are valid.
         unsafe { self.boot_services.get() }
+            .expect("the firmware provides the boot services table while boot services run")
     }
 
     pub fn runtime_services(&self) -> &RuntimeServices {
         // SAFETY: a `&SystemTable` exists only while the system table is valid,
         // and the firmware keeps the runtime services table valid as long.
         unsafe { self.runtime_services.get() }
+            .expect("the firmware provides the runtime services table")
     }
 }
 

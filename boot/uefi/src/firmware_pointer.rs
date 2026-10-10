@@ -10,10 +10,10 @@ impl<T> FirmwarePointer<T> {
     /// # Safety
     ///
     /// The table this pointer was read from must still be valid; the firmware
-    /// then keeps the pointee valid as well.
-    pub(crate) unsafe fn get(&self) -> &T {
+    /// then keeps the pointee valid as well. A null pointer gives `None`.
+    pub(crate) unsafe fn get(&self) -> Option<&T> {
         // SAFETY: the caller guarantees the table, and with it the pointee, is valid.
-        unsafe { &*self.0 }
+        unsafe { self.0.as_ref() }
     }
 }
 
