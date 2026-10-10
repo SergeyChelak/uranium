@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["xtask", "lib/address", "hal/contract", "hal/x86_64", "hal/aarch64"]
+members = ["xtask", "lib/address", "hal/contract", "hal/x86_64", "hal/aarch64", "kernel/main"]
 default-members = ["xtask"]
 
 [workspace.package]
