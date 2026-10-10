@@ -46,6 +46,14 @@ impl Platform {
             Platform::Aarch64 => "aarch64-unknown-uefi",
         }
     }
+
+    /// The file name the firmware looks for on a removable medium (UEFI 2.11, 3.5.1.1)
+    pub fn loader_file_name(self) -> &'static str {
+        match self {
+            Platform::X86_64 => "BOOTX64.EFI",
+            Platform::Aarch64 => "BOOTAA64.EFI",
+        }
+    }
 }
 
 pub fn platforms_from(
@@ -78,6 +86,12 @@ mod tests {
     #[test]
     fn all_lists_x86_64_first() {
         assert_eq!(Platform::ALL, [Platform::X86_64, Platform::Aarch64]);
+    }
+
+    #[test]
+    fn loader_file_names_follow_the_boot_protocol() {
+        assert_eq!(Platform::X86_64.loader_file_name(), "BOOTX64.EFI");
+        assert_eq!(Platform::Aarch64.loader_file_name(), "BOOTAA64.EFI");
     }
 
     #[test]

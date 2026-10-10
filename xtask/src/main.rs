@@ -3,6 +3,7 @@ mod cargo;
 mod check;
 mod clippy;
 mod dependencies;
+mod esp;
 mod fmt;
 mod layer;
 mod platform;
@@ -21,6 +22,7 @@ const COMMANDS: &[(&str, Command)] = &[
     ("dependencies", dependencies::run),
     ("check", check::run),
     ("build", build::run),
+    ("esp", esp::run),
 ];
 
 fn main() -> ExitCode {
