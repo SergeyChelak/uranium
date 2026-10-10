@@ -5,7 +5,6 @@ pub trait AddressLayout {
     const PHYSICAL_ADDRESS_BIT_COUNT: u32;
     const KERNEL_HALF_START: VirtualAddress;
     const PHYSICAL_MAP_BASE: VirtualAddress;
-    const KERNEL_IMAGE_BASE: VirtualAddress;
 
     fn is_canonical(address: VirtualAddress) -> bool {
         is_sign_extended(address.as_u64(), Self::VIRTUAL_ADDRESS_BIT_COUNT)
@@ -34,7 +33,6 @@ mod tests {
         const PHYSICAL_ADDRESS_BIT_COUNT: u32 = 52;
         const KERNEL_HALF_START: VirtualAddress = VirtualAddress::new(0xffff_8000_0000_0000);
         const PHYSICAL_MAP_BASE: VirtualAddress = VirtualAddress::new(0xffff_8000_0000_0000);
-        const KERNEL_IMAGE_BASE: VirtualAddress = VirtualAddress::new(0xffff_ffff_8000_0000);
     }
 
     #[test]
@@ -90,7 +88,6 @@ mod tests {
         const PHYSICAL_ADDRESS_BIT_COUNT: u32 = 64;
         const KERNEL_HALF_START: VirtualAddress = VirtualAddress::new(0x8000_0000_0000_0000);
         const PHYSICAL_MAP_BASE: VirtualAddress = VirtualAddress::new(0x8000_0000_0000_0000);
-        const KERNEL_IMAGE_BASE: VirtualAddress = VirtualAddress::new(0xffff_ffff_8000_0000);
     }
 
     #[test]
