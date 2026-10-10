@@ -50,6 +50,14 @@ name = "firmware"
 version = "0.1.0"
 
 [[package]]
+name = "firmware-uefi"
+version = "0.1.0"
+dependencies = [
+ "firmware",
+ "uefi",
+]
+
+[[package]]
 name = "hal"
 version = "0.1.0"
 dependencies = [

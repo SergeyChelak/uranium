@@ -9,6 +9,7 @@ members = [
     "kernel/main",
     "boot/uefi",
     "boot/firmware",
+    "boot/firmware-uefi",
 ]
 default-members = ["xtask"]
 
