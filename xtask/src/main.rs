@@ -1,3 +1,4 @@
+mod build;
 mod cargo;
 mod check;
 mod clippy;
@@ -19,6 +20,7 @@ const COMMANDS: &[(&str, Command)] = &[
     ("clippy", clippy::run),
     ("dependencies", dependencies::run),
     ("check", check::run),
+    ("build", build::run),
 ];
 
 fn main() -> ExitCode {

@@ -212,6 +212,7 @@ mod tests {
     fn messages(packages: Vec<Package>) -> Vec<String> {
         violations(&Workspace {
             root: PathBuf::from("/root"),
+            target_directory: PathBuf::from("/root/target"),
             packages,
         })
         .unwrap()
@@ -370,6 +371,7 @@ mod tests {
         undeclared.member = true;
         let error = violations(&Workspace {
             root: PathBuf::from("/root"),
+            target_directory: PathBuf::from("/root/target"),
             packages: vec![undeclared],
         })
         .unwrap_err();
@@ -380,6 +382,7 @@ mod tests {
     fn unknown_dependency_is_an_error() {
         let error = violations(&Workspace {
             root: PathBuf::from("/root"),
+            target_directory: PathBuf::from("/root/target"),
             packages: vec![package("trap", "kernel/interface", &["ghost"])],
         })
         .unwrap_err();

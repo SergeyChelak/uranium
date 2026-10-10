@@ -1,6 +1,6 @@
 use std::env;
 use std::ffi::OsString;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, bail};
@@ -30,6 +30,10 @@ pub fn run(command: &mut Command) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn artifact_path(target_directory: &Path, triple: &str, name: &str) -> PathBuf {
+    target_directory.join(triple).join("debug").join(name)
+}
+
 fn describe(command: &Command) -> String {
     let program = Path::new(command.get_program())
         .file_name()
@@ -47,7 +51,7 @@ mod tests {
     use std::ffi::OsStr;
     use std::path::Path;
 
-    use super::cargo;
+    use super::{artifact_path, cargo};
 
     #[test]
     fn cargo_command_drops_rustflags() {
@@ -59,6 +63,14 @@ mod tests {
             .collect();
         assert!(removed.contains(&OsStr::new("RUSTFLAGS")));
         assert!(removed.contains(&OsStr::new("CARGO_ENCODED_RUSTFLAGS")));
+    }
+
+    #[test]
+    fn artifact_path_uses_the_debug_profile() {
+        assert_eq!(
+            artifact_path(Path::new("/root/target"), "x86_64-unknown-none", "kernel"),
+            Path::new("/root/target/x86_64-unknown-none/debug/kernel")
+        );
     }
 
     #[test]

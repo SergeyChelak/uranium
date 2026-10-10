@@ -29,6 +29,7 @@ pub struct Package {
 #[derive(Debug)]
 pub struct Workspace {
     pub root: PathBuf,
+    pub target_directory: PathBuf,
     pub packages: Vec<Package>,
 }
 
@@ -55,6 +56,7 @@ impl Workspace {
             .collect::<anyhow::Result<Vec<Package>>>()?;
         Ok(Workspace {
             root: metadata.workspace_root.as_std_path().to_path_buf(),
+            target_directory: metadata.target_directory.as_std_path().to_path_buf(),
             packages,
         })
     }
@@ -188,6 +190,12 @@ mod tests {
     fn reads_workspace_root() {
         let workspace = workspace(&[]).unwrap();
         assert_eq!(workspace.root, Path::new("/root"));
+    }
+
+    #[test]
+    fn reads_target_directory() {
+        let workspace = workspace(&[]).unwrap();
+        assert_eq!(workspace.target_directory, Path::new("/root/target"));
     }
 
     #[test]
