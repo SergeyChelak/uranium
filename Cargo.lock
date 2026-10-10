@@ -53,6 +53,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "hal-aarch64"
+version = "0.1.0"
+dependencies = [
+ "address",
+ "hal",
+]
+
+[[package]]
 name = "hal-x86_64"
 version = "0.1.0"
 dependencies = [
