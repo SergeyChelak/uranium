@@ -1,10 +1,12 @@
 mod cargo;
+mod checkpoints;
 mod commands;
 mod dependencies;
 mod esp;
 mod firmware;
 mod layer;
 mod platform;
+mod process;
 mod qemu;
 mod targets;
 mod workspace;

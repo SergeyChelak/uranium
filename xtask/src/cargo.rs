@@ -44,7 +44,7 @@ pub fn loader_artifact(target_directory: &Path, platform: Platform) -> PathBuf {
     artifact_path(target_directory, platform.loader_target(), "loader.efi")
 }
 
-fn describe(command: &Command) -> String {
+pub fn describe(command: &Command) -> String {
     let program = Path::new(command.get_program())
         .file_name()
         .unwrap_or(command.get_program())

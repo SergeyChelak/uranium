@@ -1,3 +1,5 @@
+use std::ffi::OsString;
+
 mod build;
 mod check;
 mod clippy;
@@ -7,6 +9,8 @@ mod fmt;
 mod host_tests;
 mod qemu;
 mod run;
+mod smoke;
+mod test;
 
 pub type Command = fn(lexopt::Parser) -> anyhow::Result<()>;
 
@@ -21,7 +25,14 @@ pub const COMMANDS: &[(&str, Command)] = &[
     ("qemu", qemu::run),
     ("run", run::run),
     ("host-tests", host_tests::run),
+    ("smoke", smoke::run),
+    ("test", test::run),
 ];
+
+/// What a composite command passes to a step that takes no options of its own
+fn no_arguments() -> lexopt::Parser {
+    lexopt::Parser::from_args(std::iter::empty::<OsString>())
+}
 
 pub fn find(name: &str) -> Option<Command> {
     COMMANDS
