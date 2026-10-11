@@ -1,0 +1,16 @@
+[package]
+name = "firmware-uefi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.uranium]
+layer = "boot/implementation"
+
+[dependencies]
+firmware = { path = "../firmware" }
+uefi = { path = "../uefi" }
+
+[lints]
+workspace = true

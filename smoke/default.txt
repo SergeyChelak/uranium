@@ -1,0 +1,4 @@
+# Lines the smoke probe waits for on the serial port, in this order; a line matches as a
+# substring of what the machine prints. This file describes the current state of the
+# system: the loader starts on the firmware and greets on both consoles
+uranium loader started

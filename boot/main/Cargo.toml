@@ -1,0 +1,21 @@
+[package]
+name = "loader"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.uranium]
+layer = "boot/root"
+
+[dependencies]
+firmware = { path = "../firmware" }
+firmware-uefi = { path = "../firmware-uefi" }
+uefi = { path = "../uefi" }
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "loader"
+test = false
