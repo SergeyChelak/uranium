@@ -19,3 +19,7 @@ hal-aarch64 = { path = "../../hal/aarch64" }
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "kernel"
+test = false

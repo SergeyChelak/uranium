@@ -15,3 +15,7 @@ uefi = { path = "../uefi" }
 
 [lints]
 workspace = true
+
+[[bin]]
+name = "loader"
+test = false

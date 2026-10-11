@@ -4,6 +4,7 @@ mod clippy;
 mod dependencies;
 mod esp;
 mod fmt;
+mod host_tests;
 mod qemu;
 mod run;
 
@@ -19,6 +20,7 @@ pub const COMMANDS: &[(&str, Command)] = &[
     ("esp", esp::run),
     ("qemu", qemu::run),
     ("run", run::run),
+    ("host-tests", host_tests::run),
 ];
 
 pub fn find(name: &str) -> Option<Command> {
