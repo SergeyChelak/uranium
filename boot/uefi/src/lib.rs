@@ -11,6 +11,7 @@ mod boot_services;
 mod firmware_pointer;
 mod guid;
 mod handle;
+mod memory;
 mod protocols;
 mod runtime_services;
 mod status;
@@ -21,6 +22,7 @@ mod ucs2;
 pub use boot_services::BootServices;
 pub use guid::Guid;
 pub use handle::Handle;
+pub use memory::{MemoryDescriptor, MemoryMap, MemoryMapKey, MemoryType};
 pub use protocols::{
     File, LoadedImageProtocol, Protocol, SerialIoProtocol, SimpleFileSystemProtocol,
     SimpleTextOutputProtocol,

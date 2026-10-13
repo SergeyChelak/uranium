@@ -221,6 +221,9 @@ dependencies = [
 [[package]]
 name = "uefi"
 version = "0.1.0"
+dependencies = [
+ "address",
+]
 
 [[package]]
 name = "unicode-ident"
