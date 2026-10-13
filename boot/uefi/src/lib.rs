@@ -21,7 +21,10 @@ mod ucs2;
 pub use boot_services::BootServices;
 pub use guid::Guid;
 pub use handle::Handle;
-pub use protocols::{LoadedImageProtocol, Protocol, SerialIoProtocol, SimpleTextOutputProtocol};
+pub use protocols::{
+    File, LoadedImageProtocol, Protocol, SerialIoProtocol, SimpleFileSystemProtocol,
+    SimpleTextOutputProtocol,
+};
 pub use runtime_services::{ResetKind, RuntimeServices};
 pub use status::Status;
 pub use system_table::SystemTable;

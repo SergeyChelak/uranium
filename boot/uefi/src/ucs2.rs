@@ -56,9 +56,22 @@ impl<'a> Encoder<'a> {
     }
 }
 
+/// Writes `text` with a terminating zero into `buffer`, the way the firmware
+/// takes file names: no line-ending rules and no replacements. `None` when a
+/// character lies outside the basic plane or the text does not fit
+pub(crate) fn encode_terminated<'a>(text: &str, buffer: &'a mut [u16]) -> Option<&'a [u16]> {
+    let mut length = 0;
+    for character in text.chars() {
+        *buffer.get_mut(length)? = u16::try_from(u32::from(character)).ok()?;
+        length += 1;
+    }
+    *buffer.get_mut(length)? = 0;
+    Some(&buffer[..=length])
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{CHUNK_LENGTH, Encoder};
+    use super::{CHUNK_LENGTH, Encoder, encode_terminated};
     use std::string::String;
     use std::vec::Vec;
 
@@ -124,5 +137,39 @@ mod tests {
     #[test]
     fn empty_text_gives_no_chunk() {
         assert!(encode("").is_empty());
+    }
+
+    #[test]
+    fn encode_terminated_appends_the_terminator() {
+        let mut buffer = [u16::MAX; 4];
+        assert_eq!(
+            encode_terminated("ab", &mut buffer),
+            Some(&units("ab\0")[..])
+        );
+    }
+
+    #[test]
+    fn encode_terminated_keeps_line_feeds_as_they_are() {
+        let mut buffer = [u16::MAX; 4];
+        assert_eq!(
+            encode_terminated("a\nb", &mut buffer),
+            Some(&units("a\nb\0")[..])
+        );
+    }
+
+    #[test]
+    fn encode_terminated_needs_room_for_the_terminator() {
+        let mut buffer = [u16::MAX; 3];
+        assert_eq!(encode_terminated("abc", &mut buffer), None);
+        assert_eq!(
+            encode_terminated("ab", &mut buffer),
+            Some(&units("ab\0")[..])
+        );
+    }
+
+    #[test]
+    fn encode_terminated_rejects_characters_outside_the_basic_plane() {
+        let mut buffer = [u16::MAX; 8];
+        assert_eq!(encode_terminated("a😀", &mut buffer), None);
     }
 }

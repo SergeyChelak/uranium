@@ -30,3 +30,11 @@ pub(crate) type UnusedFirmwarePointer = FirmwarePointer<Unused>;
 /// when the function is first called
 #[repr(transparent)]
 pub(crate) struct UnusedFunctionPointer(*const c_void);
+
+#[cfg(test)]
+impl UnusedFunctionPointer {
+    /// A slot of a fake table the test never calls
+    pub(crate) const fn null() -> Self {
+        Self(core::ptr::null())
+    }
+}
