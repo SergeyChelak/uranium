@@ -1,8 +1,10 @@
+mod loaded_image;
 mod serial_io;
 mod simple_text_output;
 
 use crate::Guid;
 
+pub use loaded_image::LoadedImageProtocol;
 pub use serial_io::SerialIoProtocol;
 pub use simple_text_output::SimpleTextOutputProtocol;
 
@@ -11,8 +13,9 @@ pub use simple_text_output::SimpleTextOutputProtocol;
 /// # Safety
 ///
 /// `GUID` must identify the protocol whose structure the implementing
-/// `#[repr(C)]` type declares: `BootServices::locate_protocol` reinterprets
-/// the pointer the firmware returns for `GUID` as that type
+/// `#[repr(C)]` type declares: `BootServices::locate_protocol` and
+/// `BootServices::handle_protocol` reinterpret the pointer the firmware
+/// returns for `GUID` as that type
 pub unsafe trait Protocol {
     const GUID: Guid;
 }

@@ -5,3 +5,11 @@ use core::ptr::NonNull;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(transparent)]
 pub struct Handle(NonNull<c_void>);
+
+#[cfg(test)]
+impl Handle {
+    /// A handle for fakes that never look behind it
+    pub(crate) fn dangling() -> Self {
+        Self(NonNull::dangling())
+    }
+}
