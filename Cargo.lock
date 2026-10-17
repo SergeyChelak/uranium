@@ -48,6 +48,9 @@ dependencies = [
 [[package]]
 name = "firmware"
 version = "0.1.0"
+dependencies = [
+ "address",
+]
 
 [[package]]
 name = "firmware-uefi"

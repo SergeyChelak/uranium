@@ -8,7 +8,11 @@ publish.workspace = true
 [package.metadata.uranium]
 layer = "boot/interface"
 
+[features]
+checkpoints = []
+
 [dependencies]
+address = { path = "../../lib/address" }
 
 [lints]
 workspace = true
