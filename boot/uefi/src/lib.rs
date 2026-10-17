@@ -18,7 +18,7 @@ mod runtime_services;
 mod status;
 mod system_table;
 mod table_header;
-mod ucs2;
+pub mod ucs2;
 
 pub use boot_services::BootServices;
 pub use configuration_table::ACPI_20_TABLE_GUID;

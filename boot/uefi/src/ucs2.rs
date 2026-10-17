@@ -69,10 +69,29 @@ pub(crate) fn encode_terminated<'a>(text: &str, buffer: &'a mut [u16]) -> Option
     Some(&buffer[..=length])
 }
 
+/// Little-endian UCS-2 up to the first zero unit, written as UTF-8; the
+/// number of bytes written, or `None` when the text does not fit
+pub fn decode_terminated(bytes: &[u8], buffer: &mut [u8]) -> Option<usize> {
+    let (pairs, _odd_trailing_byte) = bytes.as_chunks::<2>();
+    let mut length = 0;
+    for &pair in pairs {
+        let unit = u16::from_le_bytes(pair);
+        if unit == 0 {
+            break;
+        }
+        let character = char::from_u32(u32::from(unit)).unwrap_or(char::REPLACEMENT_CHARACTER);
+        let encoded = buffer.get_mut(length..length + character.len_utf8())?;
+        character.encode_utf8(encoded);
+        length += encoded.len();
+    }
+    Some(length)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{CHUNK_LENGTH, Encoder, encode_terminated};
+    use super::{CHUNK_LENGTH, Encoder, decode_terminated, encode_terminated};
     use std::string::String;
+    use std::vec;
     use std::vec::Vec;
 
     fn encode(text: &str) -> Vec<Vec<u16>> {
@@ -171,5 +190,61 @@ mod tests {
     fn encode_terminated_rejects_characters_outside_the_basic_plane() {
         let mut buffer = [u16::MAX; 8];
         assert_eq!(encode_terminated("a😀", &mut buffer), None);
+    }
+
+    fn bytes(text: &str) -> Vec<u8> {
+        text.encode_utf16().flat_map(u16::to_le_bytes).collect()
+    }
+
+    fn decode(bytes: &[u8], capacity: usize) -> Option<String> {
+        let mut buffer = vec![0xff; capacity];
+        let length = decode_terminated(bytes, &mut buffer)?;
+        Some(String::from_utf8(buffer[..length].to_vec()).unwrap())
+    }
+
+    #[test]
+    fn decode_terminated_decodes_ascii_options() {
+        let options = bytes("kernel.image = \\URANIUM\\TEST.ELF");
+        assert_eq!(
+            decode(&options, 64).as_deref(),
+            Some("kernel.image = \\URANIUM\\TEST.ELF")
+        );
+    }
+
+    #[test]
+    fn decode_terminated_stops_at_the_terminator() {
+        assert_eq!(decode(&bytes("ab\0cd"), 16).as_deref(), Some("ab"));
+    }
+
+    #[test]
+    fn decode_terminated_drops_an_odd_trailing_byte() {
+        let mut options = bytes("ab");
+        options.push(b'c');
+        assert_eq!(decode(&options, 16).as_deref(), Some("ab"));
+    }
+
+    #[test]
+    fn decode_terminated_writes_basic_plane_characters_as_utf8() {
+        assert_eq!(decode(&bytes("уран"), 16).as_deref(), Some("уран"));
+    }
+
+    #[test]
+    fn decode_terminated_replaces_a_lone_surrogate() {
+        let mut options = bytes("a");
+        options.extend_from_slice(&0xd800_u16.to_le_bytes());
+        assert_eq!(decode(&options, 16).as_deref(), Some("a\u{fffd}"));
+    }
+
+    #[test]
+    fn decode_terminated_fails_when_the_options_do_not_fit() {
+        assert_eq!(decode(&bytes("abcd"), 3), None);
+        assert_eq!(decode(&bytes("abcd"), 4).as_deref(), Some("abcd"));
+        assert_eq!(decode(&bytes("уран"), 7), None);
+    }
+
+    #[test]
+    fn decode_terminated_of_nothing_is_empty() {
+        assert_eq!(decode(&[], 4).as_deref(), Some(""));
+        assert_eq!(decode(&[0, 0], 0).as_deref(), Some(""));
     }
 }

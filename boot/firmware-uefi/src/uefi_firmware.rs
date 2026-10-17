@@ -4,13 +4,14 @@ use uefi::{
     SystemTable,
 };
 
-use crate::{SerialConsole, TextConsole, UefiMemory, UefiVolume, exit};
+use crate::{SerialConsole, TextConsole, UefiMemory, UefiPlatform, UefiVolume, exit};
 
 /// The firmware as the boot sequence sees it, reached through UEFI
 pub struct UefiFirmware<'a> {
     image: Handle,
     system_table: &'a SystemTable,
     memory: UefiMemory<'a>,
+    platform: UefiPlatform<'a>,
 }
 
 impl<'a> UefiFirmware<'a> {
@@ -19,6 +20,7 @@ impl<'a> UefiFirmware<'a> {
             image,
             system_table,
             memory: UefiMemory::new(system_table.boot_services()),
+            platform: UefiPlatform::new(image, system_table),
         }
     }
 
@@ -56,6 +58,10 @@ impl<'a> UefiFirmware<'a> {
 
     pub fn memory(&self) -> &UefiMemory<'a> {
         &self.memory
+    }
+
+    pub fn platform(&self) -> &UefiPlatform<'a> {
+        &self.platform
     }
 
     pub fn exit_boot_services(
