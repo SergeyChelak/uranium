@@ -22,13 +22,13 @@ const GREETING: &str = "uranium loader started";
 /// to its system table, which stays valid until boot services end
 #[unsafe(no_mangle)]
 pub unsafe extern "efiapi" fn efi_main(
-    _image_handle: Handle,
+    image_handle: Handle,
     system_table: *const SystemTable,
 ) -> Status {
     // SAFETY: the caller guarantees the system table pointer is valid, and the
     // loader never ends boot services in M0
     let system_table = unsafe { &*system_table };
-    let firmware = UefiFirmware::new(system_table);
+    let firmware = UefiFirmware::new(image_handle, system_table);
     greet(&firmware);
     firmware.shutdown()
 }
