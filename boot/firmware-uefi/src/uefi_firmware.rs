@@ -1,24 +1,24 @@
-use firmware::{ConsoleError, FileError};
+use firmware::{ConsoleError, ExitError, FileError, MemoryMapSummary, MemoryRegion};
 use uefi::{
     Handle, LoadedImageProtocol, ResetKind, SerialIoProtocol, SimpleFileSystemProtocol, Status,
     SystemTable,
 };
 
-use crate::{SerialConsole, TextConsole, UefiVolume};
+use crate::{SerialConsole, TextConsole, UefiMemory, UefiVolume, exit};
 
 /// The firmware as the boot sequence sees it, reached through UEFI
 pub struct UefiFirmware<'a> {
     image: Handle,
     system_table: &'a SystemTable,
+    memory: UefiMemory<'a>,
 }
 
 impl<'a> UefiFirmware<'a> {
-    /// `image` is the handle of the loader itself, the one the firmware
-    /// passed to `efi_main`
     pub fn new(image: Handle, system_table: &'a SystemTable) -> Self {
         Self {
             image,
             system_table,
+            memory: UefiMemory::new(system_table.boot_services()),
         }
     }
 
@@ -41,7 +41,6 @@ impl<'a> UefiFirmware<'a> {
         }
     }
 
-    /// The file system on the device the firmware loaded this image from
     pub fn boot_volume(&self) -> Result<UefiVolume, FileError> {
         let boot_services = self.system_table.boot_services();
         let image = boot_services
@@ -53,6 +52,18 @@ impl<'a> UefiFirmware<'a> {
             .map_err(|_| FileError::Device)?;
         let root = file_system.open_volume().map_err(|_| FileError::Device)?;
         Ok(UefiVolume::new(root))
+    }
+
+    pub fn memory(&self) -> &UefiMemory<'a> {
+        &self.memory
+    }
+
+    pub fn exit_boot_services(
+        self,
+        raw: &mut [u8],
+        regions: &mut [MemoryRegion],
+    ) -> Result<MemoryMapSummary, ExitError> {
+        exit::exit_boot_services(self.system_table.boot_services(), self.image, raw, regions)
     }
 
     /// Powers the machine off; temporary for M0, where no kernel takes over

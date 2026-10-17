@@ -9,6 +9,7 @@ publish.workspace = true
 layer = "boot/implementation"
 
 [dependencies]
+address = { path = "../../lib/address" }
 firmware = { path = "../firmware" }
 uefi = { path = "../uefi" }
 

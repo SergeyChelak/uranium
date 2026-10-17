@@ -1,7 +1,6 @@
 use firmware::{FileError, Volume};
 use uefi::Status;
 
-/// The volume the loader was started from, reached through its root directory
 pub struct UefiVolume {
     root: uefi::File,
 }
@@ -22,7 +21,6 @@ impl Volume for UefiVolume {
     }
 }
 
-/// An open file; its size was read once, when it was opened
 pub struct UefiFile {
     file: uefi::File,
     size: u64,
@@ -38,8 +36,7 @@ impl firmware::File for UefiFile {
     }
 }
 
-/// `uefi::File::open` answers `INVALID_PARAMETER` for a path it could not
-/// encode, which is a path longer than the firmware accepts
+// `uefi::File::open` answers `INVALID_PARAMETER` for a path it could not encode
 fn open_error(status: Status) -> FileError {
     match status {
         Status::NOT_FOUND => FileError::NotFound,

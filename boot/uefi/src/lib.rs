@@ -24,7 +24,7 @@ pub use boot_services::BootServices;
 pub use configuration_table::ACPI_20_TABLE_GUID;
 pub use guid::Guid;
 pub use handle::Handle;
-pub use memory::{MemoryDescriptor, MemoryMap, MemoryMapKey, MemoryType};
+pub use memory::{MemoryDescriptor, MemoryMap, MemoryMapKey, MemoryType, PAGE_SIZE};
 pub use protocols::{
     File, LoadedImageProtocol, Protocol, SerialIoProtocol, SimpleFileSystemProtocol,
     SimpleTextOutputProtocol,

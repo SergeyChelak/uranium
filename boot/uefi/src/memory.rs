@@ -60,6 +60,9 @@ impl TryFrom<u32> for MemoryType {
     }
 }
 
+// UEFI 2.11, 7.2.1
+pub const PAGE_SIZE: usize = 4096;
+
 // UEFI 2.11, 7.2.1, EFI_ALLOCATE_TYPE: the values follow the C rules for an
 // enum without initializers; declared up to the kind the loader uses
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
