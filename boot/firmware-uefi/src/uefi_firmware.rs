@@ -1,4 +1,4 @@
-use firmware::{ConsoleError, ExitError, FileError, MemoryMapSummary, MemoryRegion};
+use firmware::{ConsoleError, ExitError, FileError, Firmware, MemoryMapSummary, MemoryRegion};
 use uefi::{
     Handle, LoadedImageProtocol, ResetKind, SerialIoProtocol, SimpleFileSystemProtocol, Status,
     SystemTable,
@@ -24,14 +24,29 @@ impl<'a> UefiFirmware<'a> {
         }
     }
 
-    pub fn text_console(&self) -> Result<TextConsole<'a>, ConsoleError> {
+    /// Powers the machine off through the firmware
+    pub fn shutdown(self) -> ! {
+        self.system_table
+            .runtime_services()
+            .reset_system(ResetKind::Shutdown, Status::SUCCESS)
+    }
+}
+
+impl<'a> Firmware for UefiFirmware<'a> {
+    type TextConsole = TextConsole<'a>;
+    type SerialConsole = SerialConsole<'a>;
+    type Volume = UefiVolume;
+    type Memory = UefiMemory<'a>;
+    type Platform = UefiPlatform<'a>;
+
+    fn text_console(&self) -> Result<TextConsole<'a>, ConsoleError> {
         self.system_table
             .console_out()
             .map(TextConsole::new)
             .ok_or(ConsoleError::Unavailable)
     }
 
-    pub fn serial_console(&self) -> Result<SerialConsole<'a>, ConsoleError> {
+    fn serial_console(&self) -> Result<SerialConsole<'a>, ConsoleError> {
         match self
             .system_table
             .boot_services()
@@ -43,7 +58,7 @@ impl<'a> UefiFirmware<'a> {
         }
     }
 
-    pub fn boot_volume(&self) -> Result<UefiVolume, FileError> {
+    fn boot_volume(&self) -> Result<UefiVolume, FileError> {
         let boot_services = self.system_table.boot_services();
         let image = boot_services
             .handle_protocol::<LoadedImageProtocol>(self.image)
@@ -56,26 +71,19 @@ impl<'a> UefiFirmware<'a> {
         Ok(UefiVolume::new(root))
     }
 
-    pub fn memory(&self) -> &UefiMemory<'a> {
+    fn memory(&self) -> &UefiMemory<'a> {
         &self.memory
     }
 
-    pub fn platform(&self) -> &UefiPlatform<'a> {
+    fn platform(&self) -> &UefiPlatform<'a> {
         &self.platform
     }
 
-    pub fn exit_boot_services(
+    fn exit_boot_services(
         self,
         raw: &mut [u8],
         regions: &mut [MemoryRegion],
     ) -> Result<MemoryMapSummary, ExitError> {
         exit::exit_boot_services(self.system_table.boot_services(), self.image, raw, regions)
-    }
-
-    /// Powers the machine off; temporary for M0, where no kernel takes over
-    pub fn shutdown(self) -> ! {
-        self.system_table
-            .runtime_services()
-            .reset_system(ResetKind::Shutdown, Status::SUCCESS)
     }
 }

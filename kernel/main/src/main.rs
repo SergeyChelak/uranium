@@ -10,7 +10,7 @@ hal_aarch64::entry!(kernel_main);
 
 #[expect(
     unused_variables,
-    reason = "boot information is decoded starting with milestone M1"
+    reason = "the kernel does not read the boot information yet"
 )]
 fn kernel_main(information: PhysicalAddress) -> ! {
     loop {

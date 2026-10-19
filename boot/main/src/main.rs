@@ -8,7 +8,7 @@
 use core::hint::spin_loop;
 use core::panic::PanicInfo;
 
-use firmware::{Console, ConsoleError};
+use firmware::{Console, ConsoleError, Firmware};
 use firmware_uefi::UefiFirmware;
 use uefi::{Handle, Status, SystemTable};
 
@@ -25,8 +25,9 @@ pub unsafe extern "efiapi" fn efi_main(
     image_handle: Handle,
     system_table: *const SystemTable,
 ) -> Status {
-    // SAFETY: the caller guarantees the system table pointer is valid, and the
-    // loader never ends boot services in M0
+    // SAFETY: the caller guarantees the system table pointer is valid while
+    // boot services run, and this entry point ends with a firmware reset,
+    // never with ExitBootServices
     let system_table = unsafe { &*system_table };
     let firmware = UefiFirmware::new(image_handle, system_table);
     greet(&firmware);
