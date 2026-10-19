@@ -1,6 +1,6 @@
 use core::slice;
 
-use address::VirtualAddress;
+use address::{PhysicalAddress, VirtualAddress};
 use firmware::{Allocation, Memory, MemoryError};
 use uefi::{BootServices, MemoryType, PAGE_SIZE, Status};
 
@@ -15,7 +15,7 @@ impl<'a> UefiMemory<'a> {
 }
 
 impl Memory for UefiMemory<'_> {
-    fn allocate(&self, page_count: u64) -> Result<Allocation<'_>, MemoryError> {
+    fn allocate(&self, page_count: u64) -> Result<Allocation<'_, Self>, MemoryError> {
         let count = usize::try_from(page_count).map_err(|_| MemoryError::OutOfMemory)?;
         let length = count
             .checked_mul(PAGE_SIZE)
@@ -27,9 +27,17 @@ impl Memory for UefiMemory<'_> {
         let start = VirtualAddress::new(base.as_u64()).as_mut_pointer::<u8>();
         // SAFETY: boot services identity-map the whole memory map, so `start`
         // addresses the `length` bytes the firmware has just handed to this
-        // caller alone, and the loader never frees them
+        // caller alone. The slice is the only view of them: `free` consumes it
+        // before the pages go back, leaked pages are never freed, and the
+        // mapping lasts until the handoff, after which the loader never runs
         let bytes = unsafe { slice::from_raw_parts_mut(start, length) };
-        Ok(Allocation { base, bytes })
+        Ok(Allocation::new(base, bytes, self))
+    }
+
+    fn free(&self, base: PhysicalAddress, bytes: &'static mut [u8]) -> Result<(), MemoryError> {
+        self.boot_services
+            .free_pages(base, bytes.len() / PAGE_SIZE)
+            .map_err(|_| MemoryError::Device)
     }
 
     fn memory_map_size(&self) -> Result<usize, MemoryError> {

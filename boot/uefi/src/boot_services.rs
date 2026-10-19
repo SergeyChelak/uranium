@@ -12,6 +12,9 @@ use crate::{Guid, Handle, Protocol, Status, TableHeader};
 type AllocatePagesFunction =
     unsafe extern "efiapi" fn(AllocateKind, MemoryType, usize, *mut u64) -> Status;
 
+// UEFI 2.11, 7.2.2
+type FreePagesFunction = unsafe extern "efiapi" fn(u64, usize) -> Status;
+
 // UEFI 2.11, 7.2.3
 type GetMemoryMapFunction =
     unsafe extern "efiapi" fn(*mut usize, *mut c_void, *mut usize, *mut usize, *mut u32) -> Status;
@@ -37,7 +40,7 @@ pub struct BootServices {
     raise_task_priority_level: UnusedFunctionPointer,
     restore_task_priority_level: UnusedFunctionPointer,
     allocate_pages: AllocatePagesFunction,
-    free_pages: UnusedFunctionPointer,
+    free_pages: FreePagesFunction,
     get_memory_map: GetMemoryMapFunction,
     allocate_pool: UnusedFunctionPointer,
     free_pool: UnusedFunctionPointer,
@@ -87,6 +90,14 @@ impl BootServices {
         unsafe { (self.allocate_pages)(AllocateKind::AnyPages, memory_type, count, &mut memory) }
             .into_result()?;
         Ok(PhysicalAddress::new(memory))
+    }
+
+    /// Returns `count` pages at `address`, allocated by `allocate_pages`, to
+    /// the firmware
+    pub fn free_pages(&self, address: PhysicalAddress, count: usize) -> Result<(), Status> {
+        // SAFETY: `self` lives in the boot services table, valid while boot
+        // services run
+        unsafe { (self.free_pages)(address.as_u64(), count) }.into_result()
     }
 
     /// The buffer size the next `get_memory_map` needs, with no slack added
@@ -190,6 +201,7 @@ impl BootServices {
 }
 
 const _: () = assert!(offset_of!(BootServices, allocate_pages) == 40);
+const _: () = assert!(offset_of!(BootServices, free_pages) == 48);
 const _: () = assert!(offset_of!(BootServices, get_memory_map) == 56);
 const _: () = assert!(offset_of!(BootServices, handle_protocol) == 152);
 const _: () = assert!(offset_of!(BootServices, exit_boot_services) == 232);
@@ -200,7 +212,8 @@ const _: () = assert!(offset_of!(BootServices, locate_protocol) == 320);
 mod tests {
     use super::{
         AllocateKind, AllocatePagesFunction, BootServices, ExitBootServicesFunction,
-        GetMemoryMapFunction, HandleProtocolFunction, LocateProtocolFunction, StallFunction,
+        FreePagesFunction, GetMemoryMapFunction, HandleProtocolFunction, LocateProtocolFunction,
+        StallFunction,
     };
     use crate::{Guid, Handle, MemoryMapKey, MemoryType, Protocol, Status};
     use address::PhysicalAddress;
@@ -280,6 +293,18 @@ mod tests {
         Status::OUT_OF_RESOURCES
     }
 
+    unsafe extern "efiapi" fn free_three_pages_at_0x4000(address: u64, count: usize) -> Status {
+        if address == 0x4000 && count == 3 {
+            Status::SUCCESS
+        } else {
+            Status::INVALID_PARAMETER
+        }
+    }
+
+    unsafe extern "efiapi" fn know_no_pages(_address: u64, _count: usize) -> Status {
+        Status::NOT_FOUND
+    }
+
     unsafe extern "efiapi" fn need_four_hundred_bytes(
         size: *mut usize,
         _map: *mut c_void,
@@ -326,6 +351,7 @@ mod tests {
         handle_protocol: HandleProtocolFunction,
         locate_protocol: LocateProtocolFunction,
         allocate_pages: AllocatePagesFunction,
+        free_pages: FreePagesFunction,
         get_memory_map: GetMemoryMapFunction,
         exit_boot_services: ExitBootServicesFunction,
         stall: StallFunction,
@@ -338,6 +364,7 @@ mod tests {
                 handle_protocol: support_nothing,
                 locate_protocol: find_nothing,
                 allocate_pages: refuse_allocation,
+                free_pages: know_no_pages,
                 get_memory_map: need_four_hundred_bytes,
                 exit_boot_services: exit_with_key_seven,
                 stall: stall_quietly,
@@ -361,6 +388,10 @@ mod tests {
         // SAFETY: `slot` points inside `table`
         unsafe { slot.write(fakes.allocate_pages) };
         // SAFETY: `place` comes from `MaybeUninit`, so the field exists
+        let slot = unsafe { &raw mut (*place).free_pages };
+        // SAFETY: `slot` points inside `table`
+        unsafe { slot.write(fakes.free_pages) };
+        // SAFETY: `place` comes from `MaybeUninit`, so the field exists
         let slot = unsafe { &raw mut (*place).get_memory_map };
         // SAFETY: `slot` points inside `table`
         unsafe { slot.write(fakes.get_memory_map) };
@@ -373,7 +404,7 @@ mod tests {
         // SAFETY: `slot` points inside `table`
         unsafe { slot.write(fakes.stall) };
         // SAFETY: every other field is an integer or a nullable raw pointer,
-        // for which all-zero bytes are valid; the six function pointers were
+        // for which all-zero bytes are valid; the seven function pointers were
         // written above
         unsafe { table.assume_init() }
     }
@@ -425,6 +456,28 @@ mod tests {
         assert_eq!(
             table.allocate_pages(MemoryType::LoaderData, 4),
             Err(Status::INVALID_PARAMETER)
+        );
+    }
+
+    #[test]
+    fn free_pages_hands_the_pages_back() {
+        let table = table_with(Fakes {
+            free_pages: free_three_pages_at_0x4000,
+            ..Fakes::refusing()
+        });
+        assert_eq!(table.free_pages(PhysicalAddress::new(0x4000), 3), Ok(()));
+        assert_eq!(
+            table.free_pages(PhysicalAddress::new(0x4000), 4),
+            Err(Status::INVALID_PARAMETER)
+        );
+    }
+
+    #[test]
+    fn free_pages_reports_pages_the_firmware_never_allocated() {
+        let table = table_with(Fakes::refusing());
+        assert_eq!(
+            table.free_pages(PhysicalAddress::new(0x4000), 3),
+            Err(Status::NOT_FOUND)
         );
     }
 
