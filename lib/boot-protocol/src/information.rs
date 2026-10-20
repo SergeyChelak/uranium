@@ -1,7 +1,7 @@
 use core::num::NonZeroU64;
 
 use address::{AddressLayout, PhysicalAddress, VirtualAddress};
-use byte_fields::{Decode, Decoder, Encode, Encoder, OutOfBounds, layout};
+use byte_fields::{Decode, Decoder, layout, structure};
 
 use crate::framebuffer::RawFramebuffer;
 use crate::memory_map::{self, RawMemoryRegion};
@@ -9,30 +9,31 @@ use crate::ranges::{RawRange, RawTable};
 use crate::serial_console::RawSerialConsole;
 use crate::{Framebuffer, MemoryRegion, PhysicalRange, SerialConsole, Table, UefiMemoryMap};
 
-/// What the loader writes into memory and the kernel finds through the
-/// register of its first argument
-#[repr(C)]
-pub struct RawBootInformation {
-    pub(crate) magic: u64,
-    pub(crate) version: u32,
-    pub(crate) size: u32,
-    pub(crate) physical_map_base: VirtualAddress,
-    pub(crate) kernel_image: RawRange,
-    pub(crate) kernel_virtual_base: VirtualAddress,
-    pub(crate) kernel_stack: RawRange,
-    pub(crate) page_tables: RawRange,
-    pub(crate) loader_data: RawRange,
-    pub(crate) memory_map: RawTable,
-    pub(crate) uefi_memory_map: RawTable,
-    pub(crate) uefi_descriptor_version: u32,
-    pub(crate) padding: u32,
-    pub(crate) uefi_system_table: Option<NonZeroU64>,
-    pub(crate) rsdp: Option<NonZeroU64>,
-    pub(crate) device_tree: RawRange,
-    pub(crate) framebuffer: RawFramebuffer,
-    pub(crate) command_line: RawRange,
-    pub(crate) initial_ramdisk: RawRange,
-    pub(crate) serial_console: RawSerialConsole,
+structure! {
+    /// What the loader writes into memory and the kernel finds through the
+    /// register of its first argument
+    pub struct RawBootInformation {
+        pub(crate) magic: u64,
+        pub(crate) version: u32,
+        pub(crate) size: u32,
+        pub(crate) physical_map_base: VirtualAddress,
+        pub(crate) kernel_image: RawRange,
+        pub(crate) kernel_virtual_base: VirtualAddress,
+        pub(crate) kernel_stack: RawRange,
+        pub(crate) page_tables: RawRange,
+        pub(crate) loader_data: RawRange,
+        pub(crate) memory_map: RawTable,
+        pub(crate) uefi_memory_map: RawTable,
+        pub(crate) uefi_descriptor_version: u32,
+        pub(crate) padding: u32,
+        pub(crate) uefi_system_table: Option<NonZeroU64>,
+        pub(crate) rsdp: Option<NonZeroU64>,
+        pub(crate) device_tree: RawRange,
+        pub(crate) framebuffer: RawFramebuffer,
+        pub(crate) command_line: RawRange,
+        pub(crate) initial_ramdisk: RawRange,
+        pub(crate) serial_console: RawSerialConsole,
+    }
 }
 
 impl RawBootInformation {
@@ -44,58 +45,6 @@ impl RawBootInformation {
     /// there are fewer bytes than the structure takes
     pub fn read_from(bytes: &[u8]) -> Option<Self> {
         Self::decode(&mut Decoder::new(bytes)).ok()
-    }
-}
-
-impl Decode for RawBootInformation {
-    fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
-        Ok(Self {
-            magic: decoder.read()?,
-            version: decoder.read()?,
-            size: decoder.read()?,
-            physical_map_base: decoder.read()?,
-            kernel_image: decoder.read()?,
-            kernel_virtual_base: decoder.read()?,
-            kernel_stack: decoder.read()?,
-            page_tables: decoder.read()?,
-            loader_data: decoder.read()?,
-            memory_map: decoder.read()?,
-            uefi_memory_map: decoder.read()?,
-            uefi_descriptor_version: decoder.read()?,
-            padding: decoder.read()?,
-            uefi_system_table: decoder.read()?,
-            rsdp: decoder.read()?,
-            device_tree: decoder.read()?,
-            framebuffer: decoder.read()?,
-            command_line: decoder.read()?,
-            initial_ramdisk: decoder.read()?,
-            serial_console: decoder.read()?,
-        })
-    }
-}
-
-impl Encode for RawBootInformation {
-    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds> {
-        encoder.write(&self.magic)?;
-        encoder.write(&self.version)?;
-        encoder.write(&self.size)?;
-        encoder.write(&self.physical_map_base)?;
-        encoder.write(&self.kernel_image)?;
-        encoder.write(&self.kernel_virtual_base)?;
-        encoder.write(&self.kernel_stack)?;
-        encoder.write(&self.page_tables)?;
-        encoder.write(&self.loader_data)?;
-        encoder.write(&self.memory_map)?;
-        encoder.write(&self.uefi_memory_map)?;
-        encoder.write(&self.uefi_descriptor_version)?;
-        encoder.write(&self.padding)?;
-        encoder.write(&self.uefi_system_table)?;
-        encoder.write(&self.rsdp)?;
-        encoder.write(&self.device_tree)?;
-        encoder.write(&self.framebuffer)?;
-        encoder.write(&self.command_line)?;
-        encoder.write(&self.initial_ramdisk)?;
-        encoder.write(&self.serial_console)
     }
 }
 
@@ -269,7 +218,7 @@ mod tests {
     use core::mem::offset_of;
     use std::vec::Vec;
 
-    use byte_fields::Fields;
+    use byte_fields::{Encode, Encoder, Fields};
 
     use super::testing::TestLayout;
     use super::*;

@@ -4,7 +4,8 @@
 //! is little-endian. `Fields` reads at the offsets a specification names;
 //! `Decoder` and `Encoder` walk fields in order, which is the layout of a
 //! `#[repr(C)]` structure whose padding is spelled out; `layout!` pins such
-//! a structure to the numbers of its document.
+//! a structure to the numbers of its document, and `structure!` makes one
+//! list of fields the structure, its encoding and its decoding at once.
 
 #![no_std]
 
@@ -16,6 +17,7 @@ mod encoder;
 mod fields;
 mod layout;
 mod primitives;
+mod structure;
 
 pub use decoder::{Decode, Decoder};
 pub use encoder::{Encode, Encoder};

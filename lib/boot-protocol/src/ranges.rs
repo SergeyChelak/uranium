@@ -1,12 +1,13 @@
 use core::num::NonZeroU64;
 
 use address::PhysicalAddress;
-use byte_fields::{Decode, Decoder, Encode, Encoder, OutOfBounds, layout};
+use byte_fields::{layout, structure};
 
-#[repr(C)]
-pub(crate) struct RawRange {
-    pub(crate) base: PhysicalAddress,
-    pub(crate) size: u64,
+structure! {
+    pub(crate) struct RawRange {
+        pub(crate) base: PhysicalAddress,
+        pub(crate) size: u64,
+    }
 }
 
 layout!(RawRange, 16, { base: 0, size: 8 });
@@ -18,22 +19,6 @@ impl RawRange {
     };
 }
 
-impl Encode for RawRange {
-    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds> {
-        encoder.write(&self.base)?;
-        encoder.write(&self.size)
-    }
-}
-
-impl Decode for RawRange {
-    fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
-        Ok(Self {
-            base: decoder.read()?,
-            size: decoder.read()?,
-        })
-    }
-}
-
 impl From<PhysicalRange> for RawRange {
     fn from(range: PhysicalRange) -> Self {
         Self {
@@ -43,32 +28,15 @@ impl From<PhysicalRange> for RawRange {
     }
 }
 
-#[repr(C)]
-pub(crate) struct RawTable {
-    pub(crate) base: PhysicalAddress,
-    pub(crate) count: u64,
-    pub(crate) entry_size: u64,
+structure! {
+    pub(crate) struct RawTable {
+        pub(crate) base: PhysicalAddress,
+        pub(crate) count: u64,
+        pub(crate) entry_size: u64,
+    }
 }
 
 layout!(RawTable, 24, { base: 0, count: 8, entry_size: 16 });
-
-impl Encode for RawTable {
-    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds> {
-        encoder.write(&self.base)?;
-        encoder.write(&self.count)?;
-        encoder.write(&self.entry_size)
-    }
-}
-
-impl Decode for RawTable {
-    fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
-        Ok(Self {
-            base: decoder.read()?,
-            count: decoder.read()?,
-            entry_size: decoder.read()?,
-        })
-    }
-}
 
 impl From<Table> for RawTable {
     fn from(table: Table) -> Self {

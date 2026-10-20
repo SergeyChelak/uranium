@@ -1,16 +1,17 @@
 use address::PhysicalAddress;
-use byte_fields::{Decode, Decoder, Encode, Encoder, OutOfBounds, layout};
+use byte_fields::{layout, structure};
 
 use crate::PhysicalRange;
 
-#[repr(C)]
-pub(crate) struct RawFramebuffer {
-    pub(crate) base: PhysicalAddress,
-    pub(crate) size: u64,
-    pub(crate) width: u32,
-    pub(crate) height: u32,
-    pub(crate) stride: u32,
-    pub(crate) pixel_format: u32,
+structure! {
+    pub(crate) struct RawFramebuffer {
+        pub(crate) base: PhysicalAddress,
+        pub(crate) size: u64,
+        pub(crate) width: u32,
+        pub(crate) height: u32,
+        pub(crate) stride: u32,
+        pub(crate) pixel_format: u32,
+    }
 }
 
 layout!(RawFramebuffer, 32, {
@@ -31,30 +32,6 @@ impl RawFramebuffer {
         stride: 0,
         pixel_format: 0,
     };
-}
-
-impl Encode for RawFramebuffer {
-    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds> {
-        encoder.write(&self.base)?;
-        encoder.write(&self.size)?;
-        encoder.write(&self.width)?;
-        encoder.write(&self.height)?;
-        encoder.write(&self.stride)?;
-        encoder.write(&self.pixel_format)
-    }
-}
-
-impl Decode for RawFramebuffer {
-    fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
-        Ok(Self {
-            base: decoder.read()?,
-            size: decoder.read()?,
-            width: decoder.read()?,
-            height: decoder.read()?,
-            stride: decoder.read()?,
-            pixel_format: decoder.read()?,
-        })
-    }
 }
 
 /// The byte order of a pixel in the framebuffer; the discriminant is the

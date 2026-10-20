@@ -1,38 +1,19 @@
 use address::PhysicalAddress;
-use byte_fields::{Decode, Decoder, Encode, Encoder, OutOfBounds, layout};
+use byte_fields::{Decode, Decoder, layout, structure};
 
 use crate::{PhysicalRange, Table};
 
-#[repr(C)]
-pub(crate) struct RawMemoryRegion {
-    pub(crate) base: PhysicalAddress,
-    pub(crate) size: u64,
-    pub(crate) kind: u32,
-    pub(crate) padding: u32,
+structure! {
+    pub(crate) struct RawMemoryRegion {
+        pub(crate) base: PhysicalAddress,
+        pub(crate) size: u64,
+        pub(crate) kind: u32,
+        pub(crate) padding: u32,
+    }
 }
 
 impl RawMemoryRegion {
     pub(crate) const SIZE: u64 = 24;
-}
-
-impl Encode for RawMemoryRegion {
-    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds> {
-        encoder.write(&self.base)?;
-        encoder.write(&self.size)?;
-        encoder.write(&self.kind)?;
-        encoder.write(&self.padding)
-    }
-}
-
-impl Decode for RawMemoryRegion {
-    fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
-        Ok(Self {
-            base: decoder.read()?,
-            size: decoder.read()?,
-            kind: decoder.read()?,
-            padding: decoder.read()?,
-        })
-    }
 }
 
 impl From<MemoryRegion> for RawMemoryRegion {

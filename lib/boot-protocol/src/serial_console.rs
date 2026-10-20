@@ -1,34 +1,17 @@
 use address::PhysicalAddress;
-use byte_fields::{Decode, Decoder, Encode, Encoder, OutOfBounds, layout};
+use byte_fields::{layout, structure};
 
-/// `base` is a port number for a 16550 and a physical address for a PL011,
-/// so the kind decides what it is
-#[repr(C)]
-pub(crate) struct RawSerialConsole {
-    pub(crate) base: u64,
-    pub(crate) kind: u32,
-    pub(crate) padding: u32,
+structure! {
+    /// `base` is a port number for a 16550 and a physical address for a
+    /// PL011, so the kind decides what it is
+    pub(crate) struct RawSerialConsole {
+        pub(crate) base: u64,
+        pub(crate) kind: u32,
+        pub(crate) padding: u32,
+    }
 }
 
 layout!(RawSerialConsole, 16, { base: 0, kind: 8, padding: 12 });
-
-impl Encode for RawSerialConsole {
-    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds> {
-        encoder.write(&self.base)?;
-        encoder.write(&self.kind)?;
-        encoder.write(&self.padding)
-    }
-}
-
-impl Decode for RawSerialConsole {
-    fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
-        Ok(Self {
-            base: decoder.read()?,
-            kind: decoder.read()?,
-            padding: decoder.read()?,
-        })
-    }
-}
 
 impl From<Option<SerialConsole>> for RawSerialConsole {
     /// Kind zero is the absent port
