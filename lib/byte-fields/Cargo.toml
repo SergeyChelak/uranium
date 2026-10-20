@@ -1,0 +1,15 @@
+[package]
+name = "byte-fields"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.uranium]
+layer = "lib"
+
+[dependencies]
+address = { path = "../address" }
+
+[lints]
+workspace = true
