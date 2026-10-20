@@ -56,6 +56,7 @@ mod page;
 mod page_size;
 mod page_type;
 mod physical_address;
+mod range;
 mod virtual_address;
 
 pub use frame::Frame;
@@ -63,4 +64,5 @@ pub use layout::AddressLayout;
 pub use page::Page;
 pub use page_size::{PageSize, Size1GiB, Size2MiB, Size4KiB};
 pub use physical_address::PhysicalAddress;
+pub use range::{FrameIterator, FrameRange, PageIterator, PageRange};
 pub use virtual_address::VirtualAddress;

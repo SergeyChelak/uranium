@@ -22,6 +22,13 @@ macro_rules! page_type {
                     .then(|| Self::containing(address))
             }
 
+            pub(crate) fn from_number(number: u64) -> Self {
+                Self {
+                    number,
+                    size: core::marker::PhantomData,
+                }
+            }
+
             pub fn start_address(self) -> $crate::$address {
                 $crate::$address::new(self.number * S::SIZE)
             }

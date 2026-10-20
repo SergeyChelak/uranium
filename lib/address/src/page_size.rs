@@ -4,7 +4,7 @@ mod sealed {
 
 /// A page size as a type: pages and frames of different sizes never mix, and
 /// only the sizes listed here exist
-pub trait PageSize: sealed::Sealed + Copy + Ord + core::hash::Hash {
+pub trait PageSize: sealed::Sealed + Copy + Ord + core::hash::Hash + core::fmt::Debug {
     const SIZE: u64;
     const NAME: &'static str;
 }
