@@ -1,10 +1,7 @@
-use core::mem::offset_of;
 use core::num::NonZeroU64;
 
 use address::PhysicalAddress;
-
-use crate::fields;
-use crate::layout::layout;
+use byte_fields::{Decode, Decoder, Encode, Encoder, OutOfBounds, layout};
 
 #[repr(C)]
 pub(crate) struct RawRange {
@@ -19,20 +16,20 @@ impl RawRange {
         base: PhysicalAddress::new(0),
         size: 0,
     };
+}
 
-    pub(crate) fn write_to(&self, block: &mut [u8], offset: usize) {
-        fields::put_u64(
-            block,
-            offset + offset_of!(RawRange, base),
-            self.base.as_u64(),
-        );
-        fields::put_u64(block, offset + offset_of!(RawRange, size), self.size);
+impl Encode for RawRange {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds> {
+        encoder.write(&self.base)?;
+        encoder.write(&self.size)
     }
+}
 
-    pub(crate) fn read_from(bytes: &[u8], offset: usize) -> Option<Self> {
-        Some(Self {
-            base: PhysicalAddress::new(fields::u64_at(bytes, offset + offset_of!(RawRange, base))?),
-            size: fields::u64_at(bytes, offset + offset_of!(RawRange, size))?,
+impl Decode for RawRange {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
+        Ok(Self {
+            base: decoder.read()?,
+            size: decoder.read()?,
         })
     }
 }
@@ -55,26 +52,20 @@ pub(crate) struct RawTable {
 
 layout!(RawTable, 24, { base: 0, count: 8, entry_size: 16 });
 
-impl RawTable {
-    pub(crate) fn write_to(&self, block: &mut [u8], offset: usize) {
-        fields::put_u64(
-            block,
-            offset + offset_of!(RawTable, base),
-            self.base.as_u64(),
-        );
-        fields::put_u64(block, offset + offset_of!(RawTable, count), self.count);
-        fields::put_u64(
-            block,
-            offset + offset_of!(RawTable, entry_size),
-            self.entry_size,
-        );
+impl Encode for RawTable {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds> {
+        encoder.write(&self.base)?;
+        encoder.write(&self.count)?;
+        encoder.write(&self.entry_size)
     }
+}
 
-    pub(crate) fn read_from(bytes: &[u8], offset: usize) -> Option<Self> {
-        Some(Self {
-            base: PhysicalAddress::new(fields::u64_at(bytes, offset + offset_of!(RawTable, base))?),
-            count: fields::u64_at(bytes, offset + offset_of!(RawTable, count))?,
-            entry_size: fields::u64_at(bytes, offset + offset_of!(RawTable, entry_size))?,
+impl Decode for RawTable {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
+        Ok(Self {
+            base: decoder.read()?,
+            count: decoder.read()?,
+            entry_size: decoder.read()?,
         })
     }
 }

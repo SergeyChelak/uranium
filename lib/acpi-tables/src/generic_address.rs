@@ -1,5 +1,6 @@
+use byte_fields::Fields;
+
 use crate::AcpiError;
-use crate::fields::Fields;
 
 // ACPI 6.6, 5.2.3.2
 const ADDRESS_SPACE_OFFSET: usize = 0;

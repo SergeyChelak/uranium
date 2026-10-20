@@ -14,10 +14,8 @@
 extern crate std;
 
 mod builder;
-mod fields;
 mod framebuffer;
 mod information;
-mod layout;
 mod memory_map;
 mod ranges;
 mod serial_console;

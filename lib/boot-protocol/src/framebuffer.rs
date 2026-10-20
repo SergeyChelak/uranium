@@ -1,10 +1,7 @@
-use core::mem::offset_of;
-
 use address::PhysicalAddress;
+use byte_fields::{Decode, Decoder, Encode, Encoder, OutOfBounds, layout};
 
 use crate::PhysicalRange;
-use crate::fields;
-use crate::layout::layout;
 
 #[repr(C)]
 pub(crate) struct RawFramebuffer {
@@ -34,47 +31,28 @@ impl RawFramebuffer {
         stride: 0,
         pixel_format: 0,
     };
+}
 
-    pub(crate) fn write_to(&self, block: &mut [u8], offset: usize) {
-        fields::put_u64(
-            block,
-            offset + offset_of!(RawFramebuffer, base),
-            self.base.as_u64(),
-        );
-        fields::put_u64(block, offset + offset_of!(RawFramebuffer, size), self.size);
-        fields::put_u32(
-            block,
-            offset + offset_of!(RawFramebuffer, width),
-            self.width,
-        );
-        fields::put_u32(
-            block,
-            offset + offset_of!(RawFramebuffer, height),
-            self.height,
-        );
-        fields::put_u32(
-            block,
-            offset + offset_of!(RawFramebuffer, stride),
-            self.stride,
-        );
-        fields::put_u32(
-            block,
-            offset + offset_of!(RawFramebuffer, pixel_format),
-            self.pixel_format,
-        );
+impl Encode for RawFramebuffer {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds> {
+        encoder.write(&self.base)?;
+        encoder.write(&self.size)?;
+        encoder.write(&self.width)?;
+        encoder.write(&self.height)?;
+        encoder.write(&self.stride)?;
+        encoder.write(&self.pixel_format)
     }
+}
 
-    pub(crate) fn read_from(bytes: &[u8], offset: usize) -> Option<Self> {
-        Some(Self {
-            base: PhysicalAddress::new(fields::u64_at(
-                bytes,
-                offset + offset_of!(RawFramebuffer, base),
-            )?),
-            size: fields::u64_at(bytes, offset + offset_of!(RawFramebuffer, size))?,
-            width: fields::u32_at(bytes, offset + offset_of!(RawFramebuffer, width))?,
-            height: fields::u32_at(bytes, offset + offset_of!(RawFramebuffer, height))?,
-            stride: fields::u32_at(bytes, offset + offset_of!(RawFramebuffer, stride))?,
-            pixel_format: fields::u32_at(bytes, offset + offset_of!(RawFramebuffer, pixel_format))?,
+impl Decode for RawFramebuffer {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
+        Ok(Self {
+            base: decoder.read()?,
+            size: decoder.read()?,
+            width: decoder.read()?,
+            height: decoder.read()?,
+            stride: decoder.read()?,
+            pixel_format: decoder.read()?,
         })
     }
 }

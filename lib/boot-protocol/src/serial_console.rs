@@ -1,9 +1,5 @@
-use core::mem::offset_of;
-
 use address::PhysicalAddress;
-
-use crate::fields;
-use crate::layout::layout;
+use byte_fields::{Decode, Decoder, Encode, Encoder, OutOfBounds, layout};
 
 /// `base` is a port number for a 16550 and a physical address for a PL011,
 /// so the kind decides what it is
@@ -16,30 +12,20 @@ pub(crate) struct RawSerialConsole {
 
 layout!(RawSerialConsole, 16, { base: 0, kind: 8, padding: 12 });
 
-impl RawSerialConsole {
-    pub(crate) fn write_to(&self, block: &mut [u8], offset: usize) {
-        fields::put_u64(
-            block,
-            offset + offset_of!(RawSerialConsole, base),
-            self.base,
-        );
-        fields::put_u32(
-            block,
-            offset + offset_of!(RawSerialConsole, kind),
-            self.kind,
-        );
-        fields::put_u32(
-            block,
-            offset + offset_of!(RawSerialConsole, padding),
-            self.padding,
-        );
+impl Encode for RawSerialConsole {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds> {
+        encoder.write(&self.base)?;
+        encoder.write(&self.kind)?;
+        encoder.write(&self.padding)
     }
+}
 
-    pub(crate) fn read_from(bytes: &[u8], offset: usize) -> Option<Self> {
-        Some(Self {
-            base: fields::u64_at(bytes, offset + offset_of!(RawSerialConsole, base))?,
-            kind: fields::u32_at(bytes, offset + offset_of!(RawSerialConsole, kind))?,
-            padding: fields::u32_at(bytes, offset + offset_of!(RawSerialConsole, padding))?,
+impl Decode for RawSerialConsole {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
+        Ok(Self {
+            base: decoder.read()?,
+            kind: decoder.read()?,
+            padding: decoder.read()?,
         })
     }
 }

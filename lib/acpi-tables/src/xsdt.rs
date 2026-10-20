@@ -34,7 +34,7 @@ mod tests {
 
     use super::Xsdt;
     use crate::AcpiError;
-    use crate::fields::testing::table;
+    use crate::header::testing::table;
 
     fn addresses(bytes: &[u8]) -> Result<Vec<PhysicalAddress>, AcpiError> {
         Xsdt::entries(bytes).map(Iterator::collect)

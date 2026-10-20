@@ -1,11 +1,9 @@
-use core::mem::offset_of;
 use core::num::NonZeroU64;
 
 use address::{AddressLayout, PhysicalAddress, VirtualAddress};
+use byte_fields::{Decode, Decoder, Encode, Encoder, OutOfBounds, layout};
 
-use crate::fields;
 use crate::framebuffer::RawFramebuffer;
-use crate::layout::layout;
 use crate::memory_map::{self, RawMemoryRegion};
 use crate::ranges::{RawRange, RawTable};
 use crate::serial_console::RawSerialConsole;
@@ -45,108 +43,59 @@ impl RawBootInformation {
     /// The structure the loader left at the start of `bytes`; `None` when
     /// there are fewer bytes than the structure takes
     pub fn read_from(bytes: &[u8]) -> Option<Self> {
-        let u64_at = |field| fields::u64_at(bytes, field);
-        let u32_at = |field| fields::u32_at(bytes, field);
-        Some(Self {
-            magic: u64_at(offset_of!(RawBootInformation, magic))?,
-            version: u32_at(offset_of!(RawBootInformation, version))?,
-            size: u32_at(offset_of!(RawBootInformation, size))?,
-            physical_map_base: VirtualAddress::new(u64_at(offset_of!(
-                RawBootInformation,
-                physical_map_base
-            ))?),
-            kernel_image: RawRange::read_from(bytes, offset_of!(RawBootInformation, kernel_image))?,
-            kernel_virtual_base: VirtualAddress::new(u64_at(offset_of!(
-                RawBootInformation,
-                kernel_virtual_base
-            ))?),
-            kernel_stack: RawRange::read_from(bytes, offset_of!(RawBootInformation, kernel_stack))?,
-            page_tables: RawRange::read_from(bytes, offset_of!(RawBootInformation, page_tables))?,
-            loader_data: RawRange::read_from(bytes, offset_of!(RawBootInformation, loader_data))?,
-            memory_map: RawTable::read_from(bytes, offset_of!(RawBootInformation, memory_map))?,
-            uefi_memory_map: RawTable::read_from(
-                bytes,
-                offset_of!(RawBootInformation, uefi_memory_map),
-            )?,
-            uefi_descriptor_version: u32_at(offset_of!(
-                RawBootInformation,
-                uefi_descriptor_version
-            ))?,
-            padding: u32_at(offset_of!(RawBootInformation, padding))?,
-            uefi_system_table: NonZeroU64::new(u64_at(offset_of!(
-                RawBootInformation,
-                uefi_system_table
-            ))?),
-            rsdp: NonZeroU64::new(u64_at(offset_of!(RawBootInformation, rsdp))?),
-            device_tree: RawRange::read_from(bytes, offset_of!(RawBootInformation, device_tree))?,
-            framebuffer: RawFramebuffer::read_from(
-                bytes,
-                offset_of!(RawBootInformation, framebuffer),
-            )?,
-            command_line: RawRange::read_from(bytes, offset_of!(RawBootInformation, command_line))?,
-            initial_ramdisk: RawRange::read_from(
-                bytes,
-                offset_of!(RawBootInformation, initial_ramdisk),
-            )?,
-            serial_console: RawSerialConsole::read_from(
-                bytes,
-                offset_of!(RawBootInformation, serial_console),
-            )?,
+        Self::decode(&mut Decoder::new(bytes)).ok()
+    }
+}
+
+impl Decode for RawBootInformation {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
+        Ok(Self {
+            magic: decoder.read()?,
+            version: decoder.read()?,
+            size: decoder.read()?,
+            physical_map_base: decoder.read()?,
+            kernel_image: decoder.read()?,
+            kernel_virtual_base: decoder.read()?,
+            kernel_stack: decoder.read()?,
+            page_tables: decoder.read()?,
+            loader_data: decoder.read()?,
+            memory_map: decoder.read()?,
+            uefi_memory_map: decoder.read()?,
+            uefi_descriptor_version: decoder.read()?,
+            padding: decoder.read()?,
+            uefi_system_table: decoder.read()?,
+            rsdp: decoder.read()?,
+            device_tree: decoder.read()?,
+            framebuffer: decoder.read()?,
+            command_line: decoder.read()?,
+            initial_ramdisk: decoder.read()?,
+            serial_console: decoder.read()?,
         })
     }
+}
 
-    pub(crate) fn write_to(&self, block: &mut [u8]) {
-        fields::put_u64(block, offset_of!(RawBootInformation, magic), self.magic);
-        fields::put_u32(block, offset_of!(RawBootInformation, version), self.version);
-        fields::put_u32(block, offset_of!(RawBootInformation, size), self.size);
-        fields::put_u64(
-            block,
-            offset_of!(RawBootInformation, physical_map_base),
-            self.physical_map_base.as_u64(),
-        );
-        self.kernel_image
-            .write_to(block, offset_of!(RawBootInformation, kernel_image));
-        fields::put_u64(
-            block,
-            offset_of!(RawBootInformation, kernel_virtual_base),
-            self.kernel_virtual_base.as_u64(),
-        );
-        self.kernel_stack
-            .write_to(block, offset_of!(RawBootInformation, kernel_stack));
-        self.page_tables
-            .write_to(block, offset_of!(RawBootInformation, page_tables));
-        self.loader_data
-            .write_to(block, offset_of!(RawBootInformation, loader_data));
-        self.memory_map
-            .write_to(block, offset_of!(RawBootInformation, memory_map));
-        self.uefi_memory_map
-            .write_to(block, offset_of!(RawBootInformation, uefi_memory_map));
-        fields::put_u32(
-            block,
-            offset_of!(RawBootInformation, uefi_descriptor_version),
-            self.uefi_descriptor_version,
-        );
-        fields::put_u32(block, offset_of!(RawBootInformation, padding), self.padding);
-        fields::put_u64(
-            block,
-            offset_of!(RawBootInformation, uefi_system_table),
-            self.uefi_system_table.map_or(0, NonZeroU64::get),
-        );
-        fields::put_u64(
-            block,
-            offset_of!(RawBootInformation, rsdp),
-            self.rsdp.map_or(0, NonZeroU64::get),
-        );
-        self.device_tree
-            .write_to(block, offset_of!(RawBootInformation, device_tree));
-        self.framebuffer
-            .write_to(block, offset_of!(RawBootInformation, framebuffer));
-        self.command_line
-            .write_to(block, offset_of!(RawBootInformation, command_line));
-        self.initial_ramdisk
-            .write_to(block, offset_of!(RawBootInformation, initial_ramdisk));
-        self.serial_console
-            .write_to(block, offset_of!(RawBootInformation, serial_console));
+impl Encode for RawBootInformation {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds> {
+        encoder.write(&self.magic)?;
+        encoder.write(&self.version)?;
+        encoder.write(&self.size)?;
+        encoder.write(&self.physical_map_base)?;
+        encoder.write(&self.kernel_image)?;
+        encoder.write(&self.kernel_virtual_base)?;
+        encoder.write(&self.kernel_stack)?;
+        encoder.write(&self.page_tables)?;
+        encoder.write(&self.loader_data)?;
+        encoder.write(&self.memory_map)?;
+        encoder.write(&self.uefi_memory_map)?;
+        encoder.write(&self.uefi_descriptor_version)?;
+        encoder.write(&self.padding)?;
+        encoder.write(&self.uefi_system_table)?;
+        encoder.write(&self.rsdp)?;
+        encoder.write(&self.device_tree)?;
+        encoder.write(&self.framebuffer)?;
+        encoder.write(&self.command_line)?;
+        encoder.write(&self.initial_ramdisk)?;
+        encoder.write(&self.serial_console)
     }
 }
 
@@ -317,11 +266,184 @@ pub(crate) mod testing {
 
 #[cfg(test)]
 mod tests {
+    use core::mem::offset_of;
     use std::vec::Vec;
+
+    use byte_fields::Fields;
 
     use super::testing::TestLayout;
     use super::*;
     use crate::{MemoryKind, PixelFormat};
+
+    fn filled(byte: u8) -> u64 {
+        u64::from_le_bytes([byte; 8])
+    }
+
+    fn filled32(byte: u8) -> u32 {
+        u32::from_le_bytes([byte; 4])
+    }
+
+    /// Every field carries its own byte pattern, so a field written at the
+    /// wrong offset cannot pass for its neighbour
+    fn distinct() -> RawBootInformation {
+        RawBootInformation {
+            magic: filled(0x01),
+            version: filled32(0x02),
+            size: filled32(0x03),
+            physical_map_base: VirtualAddress::new(filled(0x04)),
+            kernel_image: range(filled(0x05), filled(0x06)),
+            kernel_virtual_base: VirtualAddress::new(filled(0x07)),
+            kernel_stack: range(filled(0x08), filled(0x09)),
+            page_tables: range(filled(0x0a), filled(0x0b)),
+            loader_data: range(filled(0x0c), filled(0x0d)),
+            memory_map: table(filled(0x0e), filled(0x0f), filled(0x10)),
+            uefi_memory_map: table(filled(0x11), filled(0x12), filled(0x13)),
+            uefi_descriptor_version: filled32(0x14),
+            padding: filled32(0x15),
+            uefi_system_table: NonZeroU64::new(filled(0x16)),
+            rsdp: NonZeroU64::new(filled(0x17)),
+            device_tree: range(filled(0x18), filled(0x19)),
+            framebuffer: RawFramebuffer {
+                base: PhysicalAddress::new(filled(0x1a)),
+                size: filled(0x1b),
+                width: filled32(0x1c),
+                height: filled32(0x1d),
+                stride: filled32(0x1e),
+                pixel_format: filled32(0x1f),
+            },
+            command_line: range(filled(0x20), filled(0x21)),
+            initial_ramdisk: range(filled(0x22), filled(0x23)),
+            serial_console: RawSerialConsole {
+                base: filled(0x24),
+                kind: filled32(0x25),
+                padding: filled32(0x26),
+            },
+        }
+    }
+
+    #[test]
+    fn every_field_lands_at_its_documented_offset() {
+        let raw = distinct();
+        let mut block = [0u8; RawBootInformation::SIZE as usize];
+        raw.encode(&mut Encoder::new(&mut block)).unwrap();
+        let fields = Fields::new(&block);
+        let u64_at = |offset: usize| fields.u64(offset).unwrap();
+        let u32_at = |offset: usize| fields.u32(offset).unwrap();
+        let range_at = |offset: usize, range: &RawRange| {
+            assert_eq!(
+                u64_at(offset + offset_of!(RawRange, base)),
+                range.base.as_u64()
+            );
+            assert_eq!(u64_at(offset + offset_of!(RawRange, size)), range.size);
+        };
+        let table_at = |offset: usize, table: &RawTable| {
+            assert_eq!(
+                u64_at(offset + offset_of!(RawTable, base)),
+                table.base.as_u64()
+            );
+            assert_eq!(u64_at(offset + offset_of!(RawTable, count)), table.count);
+            assert_eq!(
+                u64_at(offset + offset_of!(RawTable, entry_size)),
+                table.entry_size
+            );
+        };
+
+        assert_eq!(u64_at(offset_of!(RawBootInformation, magic)), raw.magic);
+        assert_eq!(u32_at(offset_of!(RawBootInformation, version)), raw.version);
+        assert_eq!(u32_at(offset_of!(RawBootInformation, size)), raw.size);
+        assert_eq!(
+            u64_at(offset_of!(RawBootInformation, physical_map_base)),
+            raw.physical_map_base.as_u64()
+        );
+        range_at(
+            offset_of!(RawBootInformation, kernel_image),
+            &raw.kernel_image,
+        );
+        assert_eq!(
+            u64_at(offset_of!(RawBootInformation, kernel_virtual_base)),
+            raw.kernel_virtual_base.as_u64()
+        );
+        range_at(
+            offset_of!(RawBootInformation, kernel_stack),
+            &raw.kernel_stack,
+        );
+        range_at(
+            offset_of!(RawBootInformation, page_tables),
+            &raw.page_tables,
+        );
+        range_at(
+            offset_of!(RawBootInformation, loader_data),
+            &raw.loader_data,
+        );
+        table_at(offset_of!(RawBootInformation, memory_map), &raw.memory_map);
+        table_at(
+            offset_of!(RawBootInformation, uefi_memory_map),
+            &raw.uefi_memory_map,
+        );
+        assert_eq!(
+            u32_at(offset_of!(RawBootInformation, uefi_descriptor_version)),
+            raw.uefi_descriptor_version
+        );
+        assert_eq!(u32_at(offset_of!(RawBootInformation, padding)), raw.padding);
+        assert_eq!(
+            u64_at(offset_of!(RawBootInformation, uefi_system_table)),
+            raw.uefi_system_table.unwrap().get()
+        );
+        assert_eq!(
+            u64_at(offset_of!(RawBootInformation, rsdp)),
+            raw.rsdp.unwrap().get()
+        );
+        range_at(
+            offset_of!(RawBootInformation, device_tree),
+            &raw.device_tree,
+        );
+        let framebuffer = offset_of!(RawBootInformation, framebuffer);
+        assert_eq!(
+            u64_at(framebuffer + offset_of!(RawFramebuffer, base)),
+            raw.framebuffer.base.as_u64()
+        );
+        assert_eq!(
+            u64_at(framebuffer + offset_of!(RawFramebuffer, size)),
+            raw.framebuffer.size
+        );
+        assert_eq!(
+            u32_at(framebuffer + offset_of!(RawFramebuffer, width)),
+            raw.framebuffer.width
+        );
+        assert_eq!(
+            u32_at(framebuffer + offset_of!(RawFramebuffer, height)),
+            raw.framebuffer.height
+        );
+        assert_eq!(
+            u32_at(framebuffer + offset_of!(RawFramebuffer, stride)),
+            raw.framebuffer.stride
+        );
+        assert_eq!(
+            u32_at(framebuffer + offset_of!(RawFramebuffer, pixel_format)),
+            raw.framebuffer.pixel_format
+        );
+        range_at(
+            offset_of!(RawBootInformation, command_line),
+            &raw.command_line,
+        );
+        range_at(
+            offset_of!(RawBootInformation, initial_ramdisk),
+            &raw.initial_ramdisk,
+        );
+        let serial = offset_of!(RawBootInformation, serial_console);
+        assert_eq!(
+            u64_at(serial + offset_of!(RawSerialConsole, base)),
+            raw.serial_console.base
+        );
+        assert_eq!(
+            u32_at(serial + offset_of!(RawSerialConsole, kind)),
+            raw.serial_console.kind
+        );
+        assert_eq!(
+            u32_at(serial + offset_of!(RawSerialConsole, padding)),
+            raw.serial_console.padding
+        );
+    }
 
     fn range(base: u64, size: u64) -> RawRange {
         RawRange {

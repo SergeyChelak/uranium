@@ -3,8 +3,10 @@
 
 use address::PhysicalAddress;
 
+use byte_fields::Fields;
+
 use crate::AcpiError;
-use crate::fields::Fields;
+use crate::header::sums_to_zero;
 
 // ACPI 6.6, 5.2.5.3
 const SIGNATURE: &[u8; 8] = b"RSD PTR ";
@@ -30,7 +32,7 @@ impl Rsdp {
         if !fields.starts_with(SIGNATURE) {
             return Err(AcpiError::Signature);
         }
-        if !Fields::exactly(bytes, FIRST_CHECKSUM_LENGTH)?.sums_to_zero() {
+        if !sums_to_zero(Fields::exactly(bytes, FIRST_CHECKSUM_LENGTH)?.bytes()) {
             return Err(AcpiError::Checksum);
         }
         if fields.u8(REVISION_OFFSET)? < XSDT_REVISION {
@@ -42,7 +44,7 @@ impl Rsdp {
         if usize::try_from(length) != Ok(Self::LENGTH) {
             return Err(AcpiError::Length);
         }
-        if !fields.sums_to_zero() {
+        if !sums_to_zero(fields.bytes()) {
             return Err(AcpiError::Checksum);
         }
         Ok(Self {
@@ -59,7 +61,7 @@ mod tests {
 
     use super::Rsdp;
     use crate::AcpiError;
-    use crate::fields::testing::with_checksum;
+    use crate::header::testing::with_checksum;
 
     fn rsdp(revision: u8, length: u32, xsdt: u64) -> Vec<u8> {
         let mut bytes = [0u8; Rsdp::LENGTH];

@@ -10,6 +10,7 @@ layer = "lib"
 
 [dependencies]
 address = { path = "../address" }
+byte-fields = { path = "../byte-fields" }
 
 [lints]
 workspace = true

@@ -1,8 +1,8 @@
 use core::num::NonZeroU64;
 
 use address::{PhysicalAddress, VirtualAddress};
+use byte_fields::{Encode, Encoder, OutOfBounds};
 
-use crate::fields;
 use crate::framebuffer::RawFramebuffer;
 use crate::information::RawBootInformation;
 use crate::memory_map::RawMemoryRegion;
@@ -153,9 +153,6 @@ impl<'a> BootInformationBuilder<'a> {
         let command_line_offset =
             regions_offset.saturating_add(regions.len().saturating_mul(entry_size));
         let needed = command_line_offset.saturating_add(self.command_line.len());
-        if block.len() < needed {
-            return Err(BuildError::BlockTooSmall { needed });
-        }
 
         let raw = RawBootInformation {
             magic: RawBootInformation::MAGIC,
@@ -186,13 +183,25 @@ impl<'a> BootInformationBuilder<'a> {
             initial_ramdisk: RawRange::ABSENT,
             serial_console: RawSerialConsole::from(self.serial_console),
         };
-        raw.write_to(block);
-        for (index, region) in regions.iter().enumerate() {
-            RawMemoryRegion::from(*region).write_to(block, regions_offset + index * entry_size);
-        }
-        fields::put_bytes(block, command_line_offset, self.command_line.as_bytes());
+        lay_out(block, &raw, regions, self.command_line)
+            .map_err(|OutOfBounds| BuildError::BlockTooSmall { needed })?;
         Ok(block_base)
     }
+}
+
+/// The structure, the regions table and the command line, one after another
+fn lay_out(
+    block: &mut [u8],
+    raw: &RawBootInformation,
+    regions: &[MemoryRegion],
+    command_line: &str,
+) -> Result<(), OutOfBounds> {
+    let mut encoder = Encoder::new(block);
+    raw.encode(&mut encoder)?;
+    for region in regions {
+        RawMemoryRegion::from(*region).encode(&mut encoder)?;
+    }
+    encoder.bytes(command_line.as_bytes())
 }
 
 fn required<T>(value: Option<T>, name: &'static str) -> Result<T, BuildError> {

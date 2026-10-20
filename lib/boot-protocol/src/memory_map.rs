@@ -1,9 +1,6 @@
-use core::mem::offset_of;
-
 use address::PhysicalAddress;
+use byte_fields::{Decode, Decoder, Encode, Encoder, OutOfBounds, layout};
 
-use crate::fields;
-use crate::layout::layout;
 use crate::{PhysicalRange, Table};
 
 #[repr(C)]
@@ -16,31 +13,24 @@ pub(crate) struct RawMemoryRegion {
 
 impl RawMemoryRegion {
     pub(crate) const SIZE: u64 = 24;
+}
 
-    pub(crate) fn write_to(&self, block: &mut [u8], offset: usize) {
-        fields::put_u64(
-            block,
-            offset + offset_of!(RawMemoryRegion, base),
-            self.base.as_u64(),
-        );
-        fields::put_u64(block, offset + offset_of!(RawMemoryRegion, size), self.size);
-        fields::put_u32(block, offset + offset_of!(RawMemoryRegion, kind), self.kind);
-        fields::put_u32(
-            block,
-            offset + offset_of!(RawMemoryRegion, padding),
-            self.padding,
-        );
+impl Encode for RawMemoryRegion {
+    fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds> {
+        encoder.write(&self.base)?;
+        encoder.write(&self.size)?;
+        encoder.write(&self.kind)?;
+        encoder.write(&self.padding)
     }
+}
 
-    pub(crate) fn read_from(bytes: &[u8], offset: usize) -> Option<Self> {
-        Some(Self {
-            base: PhysicalAddress::new(fields::u64_at(
-                bytes,
-                offset + offset_of!(RawMemoryRegion, base),
-            )?),
-            size: fields::u64_at(bytes, offset + offset_of!(RawMemoryRegion, size))?,
-            kind: fields::u32_at(bytes, offset + offset_of!(RawMemoryRegion, kind))?,
-            padding: fields::u32_at(bytes, offset + offset_of!(RawMemoryRegion, padding))?,
+impl Decode for RawMemoryRegion {
+    fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
+        Ok(Self {
+            base: decoder.read()?,
+            size: decoder.read()?,
+            kind: decoder.read()?,
+            padding: decoder.read()?,
         })
     }
 }
@@ -116,7 +106,7 @@ pub struct MemoryRegion {
 impl MemoryRegion {
     /// `None` for an entry without memory behind it
     fn decode(entry: &[u8]) -> Option<Self> {
-        let raw = RawMemoryRegion::read_from(entry, 0)?;
+        let raw = RawMemoryRegion::decode(&mut Decoder::new(entry)).ok()?;
         let range = PhysicalRange::new(raw.base, raw.size)?;
         Some(Self {
             range,

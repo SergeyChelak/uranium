@@ -63,7 +63,7 @@ mod tests {
     use std::vec::Vec;
 
     use super::{SerialInterface, Spcr};
-    use crate::fields::testing::table;
+    use crate::header::testing::table;
     use crate::{AcpiError, AddressSpace, GenericAddress};
 
     fn spcr(revision: u8, interface: u8, space: u8, raw_value: u64) -> Vec<u8> {

@@ -8,7 +8,6 @@
 #[cfg(test)]
 extern crate std;
 
-mod fields;
 mod generic_address;
 mod header;
 mod rsdp;
@@ -31,4 +30,10 @@ pub enum AcpiError {
     Revision,
     /// The buffer is shorter than the table, or the length field is impossible
     Length,
+}
+
+impl From<byte_fields::OutOfBounds> for AcpiError {
+    fn from(_: byte_fields::OutOfBounds) -> Self {
+        Self::Length
+    }
 }

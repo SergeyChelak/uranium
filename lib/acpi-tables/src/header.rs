@@ -1,5 +1,6 @@
+use byte_fields::Fields;
+
 use crate::AcpiError;
-use crate::fields::Fields;
 
 // ACPI 6.6, 5.2.6
 const SIGNATURE_OFFSET: usize = 0;
@@ -43,18 +44,58 @@ impl TableHeader {
         }
         let length = usize::try_from(header.length).map_err(|_| AcpiError::Length)?;
         let table = Fields::exactly(bytes, length)?;
-        if !table.sums_to_zero() {
+        if !sums_to_zero(table.bytes()) {
             return Err(AcpiError::Checksum);
         }
         Ok((header, table))
     }
 }
 
+/// Every byte of a table, its checksum included, adds up to zero
+pub(crate) fn sums_to_zero(bytes: &[u8]) -> bool {
+    bytes.iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte)) == 0
+}
+
+#[cfg(test)]
+pub(crate) mod testing {
+    use std::vec;
+    use std::vec::Vec;
+
+    use crate::TableHeader;
+
+    /// Sets the byte at `checksum_offset` so that all of `bytes` sum to zero
+    pub(crate) fn with_checksum(mut bytes: Vec<u8>, checksum_offset: usize) -> Vec<u8> {
+        bytes[checksum_offset] = 0;
+        let sum = bytes.iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte));
+        bytes[checksum_offset] = sum.wrapping_neg();
+        bytes
+    }
+
+    /// A table with a valid header: the signature, the length over everything,
+    /// the revision and the checksum; the vendor fields stay zero
+    pub(crate) fn table(signature: &[u8; 4], revision: u8, body: &[u8]) -> Vec<u8> {
+        let mut bytes = vec![0u8; TableHeader::LENGTH];
+        bytes[..4].copy_from_slice(signature);
+        let length = u32::try_from(TableHeader::LENGTH + body.len()).unwrap();
+        bytes[4..8].copy_from_slice(&length.to_le_bytes());
+        bytes[8] = revision;
+        bytes.extend_from_slice(body);
+        with_checksum(bytes, 9)
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::TableHeader;
+    use super::testing::table;
+    use super::{TableHeader, sums_to_zero};
     use crate::AcpiError;
-    use crate::fields::testing::table;
+
+    #[test]
+    fn sums_to_zero_wraps_around_at_256() {
+        assert!(sums_to_zero(&[0x80, 0x80]));
+        assert!(sums_to_zero(&[]));
+        assert!(!sums_to_zero(&[0x80, 0x7f]));
+    }
 
     #[test]
     fn header_parses_signature_length_and_revision() {
