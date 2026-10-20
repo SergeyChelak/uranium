@@ -1,3 +1,29 @@
+use core::mem::offset_of;
+
+use address::PhysicalAddress;
+
+use crate::layout::layout;
+use crate::{PhysicalRange, Table};
+
+#[repr(C)]
+pub(crate) struct RawMemoryRegion {
+    pub(crate) base: PhysicalAddress,
+    pub(crate) size: u64,
+    pub(crate) kind: u32,
+    pub(crate) padding: u32,
+}
+
+impl RawMemoryRegion {
+    pub(crate) const SIZE: u64 = 24;
+}
+
+layout!(RawMemoryRegion, RawMemoryRegion::SIZE as usize, {
+    base: 0,
+    size: 8,
+    kind: 16,
+    padding: 20,
+});
+
 /// How the kernel may use a region of the memory map; the discriminant is
 /// the code that travels in the wire format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,58 +68,53 @@ impl From<u32> for MemoryKind {
     }
 }
 
-/// The byte order of a pixel in the framebuffer; the discriminant is the
-/// code that travels in the wire format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PixelFormat {
-    Unknown = 0,
-    Rgb8 = 1,
-    Bgr8 = 2,
+pub struct MemoryRegion {
+    pub range: PhysicalRange,
+    pub kind: MemoryKind,
 }
 
-impl From<PixelFormat> for u32 {
-    fn from(format: PixelFormat) -> u32 {
-        format as u32
+impl MemoryRegion {
+    /// `None` for an entry without memory behind it
+    fn decode(entry: &[u8]) -> Option<Self> {
+        let base = PhysicalAddress::new(u64_at(entry, offset_of!(RawMemoryRegion, base))?);
+        let size = u64_at(entry, offset_of!(RawMemoryRegion, size))?;
+        let kind = MemoryKind::from(u32_at(entry, offset_of!(RawMemoryRegion, kind))?);
+        PhysicalRange::new(base, size).map(|range| Self { range, kind })
     }
 }
 
-impl From<u32> for PixelFormat {
-    fn from(code: u32) -> Self {
-        match code {
-            1 => Self::Rgb8,
-            2 => Self::Bgr8,
-            _ => Self::Unknown,
-        }
-    }
+/// The regions of a table whose bytes the caller read, stepping by the
+/// entry size the loader wrote so that longer entries of a later version
+/// decode the same
+pub(crate) fn regions(
+    table: &[u8],
+    count: u64,
+    entry_size: usize,
+) -> impl Iterator<Item = MemoryRegion> + '_ {
+    let count = usize::try_from(count).unwrap_or(usize::MAX);
+    table
+        .chunks_exact(entry_size)
+        .take(count)
+        .filter_map(MemoryRegion::decode)
 }
 
-/// The chip behind the serial port the loader found for the kernel's early
-/// console; the discriminant is the code that travels in the wire format
+/// The memory map as the firmware gave it, kept for the kernel to hand back
+/// through `SetVirtualAddressMap`; this crate does not read its entries
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SerialKind {
-    Uart16550 = 1,
-    Pl011 = 2,
+pub struct UefiMemoryMap {
+    pub table: Table,
+    pub descriptor_version: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct UnknownSerialKind(pub u32);
-
-impl From<SerialKind> for u32 {
-    fn from(kind: SerialKind) -> u32 {
-        kind as u32
-    }
+fn u64_at(bytes: &[u8], offset: usize) -> Option<u64> {
+    let field = bytes.get(offset..offset.checked_add(8)?)?;
+    Some(u64::from_le_bytes(field.try_into().ok()?))
 }
 
-impl TryFrom<u32> for SerialKind {
-    type Error = UnknownSerialKind;
-
-    fn try_from(code: u32) -> Result<Self, UnknownSerialKind> {
-        match code {
-            1 => Ok(Self::Uart16550),
-            2 => Ok(Self::Pl011),
-            other => Err(UnknownSerialKind(other)),
-        }
-    }
+fn u32_at(bytes: &[u8], offset: usize) -> Option<u32> {
+    let field = bytes.get(offset..offset.checked_add(4)?)?;
+    Some(u32::from_le_bytes(field.try_into().ok()?))
 }
 
 #[cfg(test)]
@@ -116,15 +137,9 @@ mod tests {
     ];
 
     #[test]
-    fn every_kind_round_trips_through_u32() {
+    fn every_memory_kind_round_trips_through_u32() {
         for kind in MEMORY_KINDS {
             assert_eq!(MemoryKind::from(u32::from(kind)), kind);
-        }
-        for format in [PixelFormat::Unknown, PixelFormat::Rgb8, PixelFormat::Bgr8] {
-            assert_eq!(PixelFormat::from(u32::from(format)), format);
-        }
-        for kind in [SerialKind::Uart16550, SerialKind::Pl011] {
-            assert_eq!(SerialKind::try_from(u32::from(kind)), Ok(kind));
         }
     }
 
@@ -138,20 +153,6 @@ mod tests {
     fn unknown_memory_kind_is_reserved() {
         for code in [0, 13, u32::MAX] {
             assert_eq!(MemoryKind::from(code), MemoryKind::Reserved);
-        }
-    }
-
-    #[test]
-    fn unknown_pixel_format_is_unknown() {
-        for code in [3, u32::MAX] {
-            assert_eq!(PixelFormat::from(code), PixelFormat::Unknown);
-        }
-    }
-
-    #[test]
-    fn unknown_serial_kind_names_the_code() {
-        for code in [0, 3, u32::MAX] {
-            assert_eq!(SerialKind::try_from(code), Err(UnknownSerialKind(code)));
         }
     }
 }
