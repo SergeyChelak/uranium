@@ -1,7 +1,9 @@
+use core::mem::offset_of;
 use core::num::NonZeroU64;
 
 use address::PhysicalAddress;
 
+use crate::fields;
 use crate::layout::layout;
 
 #[repr(C)]
@@ -12,6 +14,38 @@ pub(crate) struct RawRange {
 
 layout!(RawRange, 16, { base: 0, size: 8 });
 
+impl RawRange {
+    pub(crate) const ABSENT: Self = Self {
+        base: PhysicalAddress::new(0),
+        size: 0,
+    };
+
+    pub(crate) fn write_to(&self, block: &mut [u8], offset: usize) {
+        fields::put_u64(
+            block,
+            offset + offset_of!(RawRange, base),
+            self.base.as_u64(),
+        );
+        fields::put_u64(block, offset + offset_of!(RawRange, size), self.size);
+    }
+
+    pub(crate) fn read_from(bytes: &[u8], offset: usize) -> Option<Self> {
+        Some(Self {
+            base: PhysicalAddress::new(fields::u64_at(bytes, offset + offset_of!(RawRange, base))?),
+            size: fields::u64_at(bytes, offset + offset_of!(RawRange, size))?,
+        })
+    }
+}
+
+impl From<PhysicalRange> for RawRange {
+    fn from(range: PhysicalRange) -> Self {
+        Self {
+            base: range.base,
+            size: range.size.get(),
+        }
+    }
+}
+
 #[repr(C)]
 pub(crate) struct RawTable {
     pub(crate) base: PhysicalAddress,
@@ -20,6 +54,40 @@ pub(crate) struct RawTable {
 }
 
 layout!(RawTable, 24, { base: 0, count: 8, entry_size: 16 });
+
+impl RawTable {
+    pub(crate) fn write_to(&self, block: &mut [u8], offset: usize) {
+        fields::put_u64(
+            block,
+            offset + offset_of!(RawTable, base),
+            self.base.as_u64(),
+        );
+        fields::put_u64(block, offset + offset_of!(RawTable, count), self.count);
+        fields::put_u64(
+            block,
+            offset + offset_of!(RawTable, entry_size),
+            self.entry_size,
+        );
+    }
+
+    pub(crate) fn read_from(bytes: &[u8], offset: usize) -> Option<Self> {
+        Some(Self {
+            base: PhysicalAddress::new(fields::u64_at(bytes, offset + offset_of!(RawTable, base))?),
+            count: fields::u64_at(bytes, offset + offset_of!(RawTable, count))?,
+            entry_size: fields::u64_at(bytes, offset + offset_of!(RawTable, entry_size))?,
+        })
+    }
+}
+
+impl From<Table> for RawTable {
+    fn from(table: Table) -> Self {
+        Self {
+            base: table.base,
+            count: table.count,
+            entry_size: table.entry_size,
+        }
+    }
+}
 
 /// A region of physical memory; it cannot be empty, so nobody checks
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

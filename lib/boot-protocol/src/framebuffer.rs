@@ -1,6 +1,9 @@
+use core::mem::offset_of;
+
 use address::PhysicalAddress;
 
 use crate::PhysicalRange;
+use crate::fields;
 use crate::layout::layout;
 
 #[repr(C)]
@@ -21,6 +24,60 @@ layout!(RawFramebuffer, 32, {
     stride: 24,
     pixel_format: 28,
 });
+
+impl RawFramebuffer {
+    pub(crate) const ABSENT: Self = Self {
+        base: PhysicalAddress::new(0),
+        size: 0,
+        width: 0,
+        height: 0,
+        stride: 0,
+        pixel_format: 0,
+    };
+
+    pub(crate) fn write_to(&self, block: &mut [u8], offset: usize) {
+        fields::put_u64(
+            block,
+            offset + offset_of!(RawFramebuffer, base),
+            self.base.as_u64(),
+        );
+        fields::put_u64(block, offset + offset_of!(RawFramebuffer, size), self.size);
+        fields::put_u32(
+            block,
+            offset + offset_of!(RawFramebuffer, width),
+            self.width,
+        );
+        fields::put_u32(
+            block,
+            offset + offset_of!(RawFramebuffer, height),
+            self.height,
+        );
+        fields::put_u32(
+            block,
+            offset + offset_of!(RawFramebuffer, stride),
+            self.stride,
+        );
+        fields::put_u32(
+            block,
+            offset + offset_of!(RawFramebuffer, pixel_format),
+            self.pixel_format,
+        );
+    }
+
+    pub(crate) fn read_from(bytes: &[u8], offset: usize) -> Option<Self> {
+        Some(Self {
+            base: PhysicalAddress::new(fields::u64_at(
+                bytes,
+                offset + offset_of!(RawFramebuffer, base),
+            )?),
+            size: fields::u64_at(bytes, offset + offset_of!(RawFramebuffer, size))?,
+            width: fields::u32_at(bytes, offset + offset_of!(RawFramebuffer, width))?,
+            height: fields::u32_at(bytes, offset + offset_of!(RawFramebuffer, height))?,
+            stride: fields::u32_at(bytes, offset + offset_of!(RawFramebuffer, stride))?,
+            pixel_format: fields::u32_at(bytes, offset + offset_of!(RawFramebuffer, pixel_format))?,
+        })
+    }
+}
 
 /// The byte order of a pixel in the framebuffer; the discriminant is the
 /// code that travels in the wire format

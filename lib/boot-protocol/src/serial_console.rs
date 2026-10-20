@@ -1,5 +1,8 @@
+use core::mem::offset_of;
+
 use address::PhysicalAddress;
 
+use crate::fields;
 use crate::layout::layout;
 
 /// `base` is a port number for a 16550 and a physical address for a PL011,
@@ -12,6 +15,52 @@ pub(crate) struct RawSerialConsole {
 }
 
 layout!(RawSerialConsole, 16, { base: 0, kind: 8, padding: 12 });
+
+impl RawSerialConsole {
+    pub(crate) fn write_to(&self, block: &mut [u8], offset: usize) {
+        fields::put_u64(
+            block,
+            offset + offset_of!(RawSerialConsole, base),
+            self.base,
+        );
+        fields::put_u32(
+            block,
+            offset + offset_of!(RawSerialConsole, kind),
+            self.kind,
+        );
+        fields::put_u32(
+            block,
+            offset + offset_of!(RawSerialConsole, padding),
+            self.padding,
+        );
+    }
+
+    pub(crate) fn read_from(bytes: &[u8], offset: usize) -> Option<Self> {
+        Some(Self {
+            base: fields::u64_at(bytes, offset + offset_of!(RawSerialConsole, base))?,
+            kind: fields::u32_at(bytes, offset + offset_of!(RawSerialConsole, kind))?,
+            padding: fields::u32_at(bytes, offset + offset_of!(RawSerialConsole, padding))?,
+        })
+    }
+}
+
+impl From<Option<SerialConsole>> for RawSerialConsole {
+    /// Kind zero is the absent port
+    fn from(console: Option<SerialConsole>) -> Self {
+        let (base, kind) = match console {
+            None => (0, 0),
+            Some(SerialConsole::Uart16550 { port }) => {
+                (u64::from(port), u32::from(SerialKind::Uart16550))
+            }
+            Some(SerialConsole::Pl011 { base }) => (base.as_u64(), u32::from(SerialKind::Pl011)),
+        };
+        Self {
+            base,
+            kind,
+            padding: 0,
+        }
+    }
+}
 
 /// The chip behind the serial port; the discriminant is the code that
 /// travels in the wire format

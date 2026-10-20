@@ -1,7 +1,9 @@
+use core::mem::offset_of;
 use core::num::NonZeroU64;
 
 use address::{AddressLayout, PhysicalAddress, VirtualAddress};
 
+use crate::fields;
 use crate::framebuffer::RawFramebuffer;
 use crate::layout::layout;
 use crate::memory_map::{self, RawMemoryRegion};
@@ -39,6 +41,113 @@ impl RawBootInformation {
     pub(crate) const MAGIC: u64 = u64::from_le_bytes(*b"URANIUM0");
     pub(crate) const VERSION: u32 = 0;
     pub(crate) const SIZE: u32 = 264;
+
+    /// The structure the loader left at the start of `bytes`; `None` when
+    /// there are fewer bytes than the structure takes
+    pub fn read_from(bytes: &[u8]) -> Option<Self> {
+        let u64_at = |field| fields::u64_at(bytes, field);
+        let u32_at = |field| fields::u32_at(bytes, field);
+        Some(Self {
+            magic: u64_at(offset_of!(RawBootInformation, magic))?,
+            version: u32_at(offset_of!(RawBootInformation, version))?,
+            size: u32_at(offset_of!(RawBootInformation, size))?,
+            physical_map_base: VirtualAddress::new(u64_at(offset_of!(
+                RawBootInformation,
+                physical_map_base
+            ))?),
+            kernel_image: RawRange::read_from(bytes, offset_of!(RawBootInformation, kernel_image))?,
+            kernel_virtual_base: VirtualAddress::new(u64_at(offset_of!(
+                RawBootInformation,
+                kernel_virtual_base
+            ))?),
+            kernel_stack: RawRange::read_from(bytes, offset_of!(RawBootInformation, kernel_stack))?,
+            page_tables: RawRange::read_from(bytes, offset_of!(RawBootInformation, page_tables))?,
+            loader_data: RawRange::read_from(bytes, offset_of!(RawBootInformation, loader_data))?,
+            memory_map: RawTable::read_from(bytes, offset_of!(RawBootInformation, memory_map))?,
+            uefi_memory_map: RawTable::read_from(
+                bytes,
+                offset_of!(RawBootInformation, uefi_memory_map),
+            )?,
+            uefi_descriptor_version: u32_at(offset_of!(
+                RawBootInformation,
+                uefi_descriptor_version
+            ))?,
+            padding: u32_at(offset_of!(RawBootInformation, padding))?,
+            uefi_system_table: NonZeroU64::new(u64_at(offset_of!(
+                RawBootInformation,
+                uefi_system_table
+            ))?),
+            rsdp: NonZeroU64::new(u64_at(offset_of!(RawBootInformation, rsdp))?),
+            device_tree: RawRange::read_from(bytes, offset_of!(RawBootInformation, device_tree))?,
+            framebuffer: RawFramebuffer::read_from(
+                bytes,
+                offset_of!(RawBootInformation, framebuffer),
+            )?,
+            command_line: RawRange::read_from(bytes, offset_of!(RawBootInformation, command_line))?,
+            initial_ramdisk: RawRange::read_from(
+                bytes,
+                offset_of!(RawBootInformation, initial_ramdisk),
+            )?,
+            serial_console: RawSerialConsole::read_from(
+                bytes,
+                offset_of!(RawBootInformation, serial_console),
+            )?,
+        })
+    }
+
+    pub(crate) fn write_to(&self, block: &mut [u8]) {
+        fields::put_u64(block, offset_of!(RawBootInformation, magic), self.magic);
+        fields::put_u32(block, offset_of!(RawBootInformation, version), self.version);
+        fields::put_u32(block, offset_of!(RawBootInformation, size), self.size);
+        fields::put_u64(
+            block,
+            offset_of!(RawBootInformation, physical_map_base),
+            self.physical_map_base.as_u64(),
+        );
+        self.kernel_image
+            .write_to(block, offset_of!(RawBootInformation, kernel_image));
+        fields::put_u64(
+            block,
+            offset_of!(RawBootInformation, kernel_virtual_base),
+            self.kernel_virtual_base.as_u64(),
+        );
+        self.kernel_stack
+            .write_to(block, offset_of!(RawBootInformation, kernel_stack));
+        self.page_tables
+            .write_to(block, offset_of!(RawBootInformation, page_tables));
+        self.loader_data
+            .write_to(block, offset_of!(RawBootInformation, loader_data));
+        self.memory_map
+            .write_to(block, offset_of!(RawBootInformation, memory_map));
+        self.uefi_memory_map
+            .write_to(block, offset_of!(RawBootInformation, uefi_memory_map));
+        fields::put_u32(
+            block,
+            offset_of!(RawBootInformation, uefi_descriptor_version),
+            self.uefi_descriptor_version,
+        );
+        fields::put_u32(block, offset_of!(RawBootInformation, padding), self.padding);
+        fields::put_u64(
+            block,
+            offset_of!(RawBootInformation, uefi_system_table),
+            self.uefi_system_table.map_or(0, NonZeroU64::get),
+        );
+        fields::put_u64(
+            block,
+            offset_of!(RawBootInformation, rsdp),
+            self.rsdp.map_or(0, NonZeroU64::get),
+        );
+        self.device_tree
+            .write_to(block, offset_of!(RawBootInformation, device_tree));
+        self.framebuffer
+            .write_to(block, offset_of!(RawBootInformation, framebuffer));
+        self.command_line
+            .write_to(block, offset_of!(RawBootInformation, command_line));
+        self.initial_ramdisk
+            .write_to(block, offset_of!(RawBootInformation, initial_ramdisk));
+        self.serial_console
+            .write_to(block, offset_of!(RawBootInformation, serial_console));
+    }
 }
 
 layout!(RawBootInformation, RawBootInformation::SIZE as usize, {
@@ -193,13 +302,10 @@ fn required(range: &RawRange) -> PhysicalRange {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::vec::Vec;
+pub(crate) mod testing {
+    use address::{AddressLayout, VirtualAddress};
 
-    use super::*;
-    use crate::{MemoryKind, PixelFormat};
-
-    struct TestLayout;
+    pub(crate) struct TestLayout;
 
     impl AddressLayout for TestLayout {
         const VIRTUAL_ADDRESS_BIT_COUNT: u32 = 48;
@@ -207,6 +313,15 @@ mod tests {
         const KERNEL_HALF_START: VirtualAddress = VirtualAddress::new(0xffff_8000_0000_0000);
         const PHYSICAL_MAP_BASE: VirtualAddress = VirtualAddress::new(0xffff_8000_0000_0000);
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::vec::Vec;
+
+    use super::testing::TestLayout;
+    use super::*;
+    use crate::{MemoryKind, PixelFormat};
 
     fn range(base: u64, size: u64) -> RawRange {
         RawRange {
