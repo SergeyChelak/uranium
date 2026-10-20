@@ -3,6 +3,7 @@ resolver = "3"
 members = [
     "xtask",
     "lib/address",
+    "lib/acpi-tables",
     "hal/contract",
     "hal/x86_64",
     "hal/aarch64",

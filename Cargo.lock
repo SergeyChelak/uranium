@@ -3,6 +3,13 @@
 version = 4
 
 [[package]]
+name = "acpi-tables"
+version = "0.1.0"
+dependencies = [
+ "address",
+]
+
+[[package]]
 name = "address"
 version = "0.1.0"
 
