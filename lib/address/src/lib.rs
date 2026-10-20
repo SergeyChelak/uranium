@@ -27,6 +27,21 @@
 //! ```compile_fail,E0277
 //! let _address: address::PhysicalAddress = 0u64.into();
 //! ```
+//!
+//! Pages of different sizes never mix:
+//!
+//! ```compile_fail,E0308
+//! let small = address::Page::<address::Size4KiB>::containing(address::VirtualAddress::new(0));
+//! let large = address::Page::<address::Size2MiB>::containing(address::VirtualAddress::new(0));
+//! let _ = small == large;
+//! ```
+//!
+//! A page is never built from a physical address, nor a frame from a virtual
+//! one; the link between them is a mapping, which lives elsewhere:
+//!
+//! ```compile_fail,E0308
+//! let _ = address::Page::<address::Size4KiB>::containing(address::PhysicalAddress::new(0));
+//! ```
 
 #![no_std]
 
@@ -35,10 +50,17 @@ extern crate std;
 
 mod address_type;
 mod alignment;
+mod frame;
 mod layout;
+mod page;
+mod page_size;
+mod page_type;
 mod physical_address;
 mod virtual_address;
 
+pub use frame::Frame;
 pub use layout::AddressLayout;
+pub use page::Page;
+pub use page_size::{PageSize, Size1GiB, Size2MiB, Size4KiB};
 pub use physical_address::PhysicalAddress;
 pub use virtual_address::VirtualAddress;
