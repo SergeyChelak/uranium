@@ -1,6 +1,8 @@
 //! Readers for the ELF64 executable format over a byte slice, without
 //! touching memory: [`ElfFile`] reads and checks the file header, locates the
-//! program header table and walks its entries. The crate reads and reports;
+//! program header table and walks its entries; [`ExecutableFile`] adds the
+//! checks every loader of an executable makes, with the rule for where a
+//! segment may lie supplied by that loader. The crate reads and reports;
 //! whether a file may be loaded, and where, is the caller's decision: the
 //! loader places the kernel, the kernel places a user program.
 
@@ -10,12 +12,14 @@
 extern crate std;
 
 mod elf_file;
+mod executable_file;
 mod header;
 mod program_header;
 #[cfg(test)]
 pub(crate) mod testing;
 
 pub use elf_file::ElfFile;
+pub use executable_file::{ExecutableError, ExecutableFile};
 pub use header::{FileType, Header, Machine};
 pub use program_header::{Segment, SegmentKind};
 
