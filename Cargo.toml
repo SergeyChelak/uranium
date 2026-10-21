@@ -6,6 +6,7 @@ members = [
     "lib/byte-fields",
     "lib/acpi-tables",
     "lib/boot-protocol",
+    "lib/elf",
     "hal/contract",
     "hal/x86_64",
     "hal/aarch64",

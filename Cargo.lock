@@ -69,6 +69,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "elf"
+version = "0.1.0"
+dependencies = [
+ "address",
+ "byte-fields",
+]
+
+[[package]]
 name = "firmware"
 version = "0.1.0"
 dependencies = [
