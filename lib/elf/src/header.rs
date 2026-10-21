@@ -54,36 +54,47 @@ const CLASS_64: u8 = 2;
 const DATA_LITTLE_ENDIAN: u8 = 1;
 // ELF-64 1.5 Draft 2, section 3: EV_CURRENT
 const CURRENT_VERSION: u32 = 1;
-// ELF-64 1.5 Draft 2, Table 6
-const EXECUTABLE: u16 = 2;
 
-/// The processors an executable can be built for; the discriminant is the
-/// `e_machine` code
+/// The `e_type` code: what kind of object the file is. The specification
+/// leaves ranges to operating systems and processors, so any code is a
+/// value here and the named ones are those the base document defines
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Machine {
-    // x86-64 psABI 0.99.7, 4.1.1
-    X86_64 = 62,
-    // AAELF64 2025Q4, 5.2
-    Aarch64 = 183,
+pub struct FileType(u16);
+
+impl FileType {
+    // ELF-64 1.5 Draft 2, Table 6
+    pub const NONE: Self = Self(0);
+    pub const RELOCATABLE: Self = Self(1);
+    pub const EXECUTABLE: Self = Self(2);
+    pub const SHARED_OBJECT: Self = Self(3);
+    pub const CORE: Self = Self(4);
+
+    pub const fn code(self) -> u16 {
+        self.0
+    }
 }
+
+/// The `e_machine` code: the processor the file is built for. Only the two
+/// Uranium runs on are named; any other code is still a value
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Machine(u16);
 
 impl Machine {
-    fn from_code(code: u16) -> Result<Self, ElfError> {
-        match code {
-            62 => Ok(Self::X86_64),
-            183 => Ok(Self::Aarch64),
-            _ => Err(ElfError::Machine),
-        }
-    }
+    // x86-64 psABI 0.99.7, 4.1.1
+    pub const X86_64: Self = Self(62);
+    // AAELF64 2025Q4, 5.2
+    pub const AARCH64: Self = Self(183);
 
-    pub fn code(self) -> u16 {
-        self as u16
+    pub const fn code(self) -> u16 {
+        self.0
     }
 }
 
-/// What the loader needs from the file header, checked on the way in
+/// What the file header says, read as values; the only checks are that the
+/// file is one this crate can read and that it is consistent with itself
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Header {
+    pub file_type: FileType,
     pub machine: Machine,
     pub entry: VirtualAddress,
     pub(crate) program_header_offset: u64,
@@ -92,9 +103,9 @@ pub struct Header {
 }
 
 impl Header {
-    /// Reads and checks the header at the start of `bytes`: a 64-bit
-    /// little-endian executable of the current version for a known machine,
-    /// whose program header table lies within `bytes`
+    /// Reads the header at the start of `bytes`: a 64-bit little-endian
+    /// file of the current version, whose program header table lies within
+    /// `bytes`
     pub fn parse(bytes: &[u8]) -> Result<Self, ElfError> {
         let raw = RawHeader::decode(&mut Decoder::new(bytes))?;
         let identification = raw.identification;
@@ -112,15 +123,12 @@ impl Header {
         {
             return Err(ElfError::Version);
         }
-        if raw.file_type != EXECUTABLE {
-            return Err(ElfError::Type);
-        }
-        let machine = Machine::from_code(raw.machine)?;
         if usize::from(raw.program_header_entry_size) < RawProgramHeader::SIZE {
             return Err(ElfError::ProgramHeaderSize);
         }
         let header = Self {
-            machine,
+            file_type: FileType(raw.file_type),
+            machine: Machine(raw.machine),
             entry: raw.entry,
             program_header_offset: raw.program_header_offset,
             program_header_entry_size: raw.program_header_entry_size,
@@ -152,14 +160,12 @@ pub(crate) mod testing {
     use super::RawHeader;
     use crate::program_header::RawProgramHeader;
 
-    pub(crate) const X86_64: u16 = 62;
-
     /// A header for `program_headers` that start right behind the header
     pub(crate) fn header(program_headers: usize) -> RawHeader {
         RawHeader {
             identification: *b"\x7fELF\x02\x01\x01\0\0\0\0\0\0\0\0\0",
             file_type: 2,
-            machine: X86_64,
+            machine: 62,
             version: 1,
             entry: VirtualAddress::new(0xffff_ffff_8000_0000),
             program_header_offset: 64,
@@ -207,6 +213,7 @@ mod tests {
         assert_eq!(
             Header::parse(&bytes),
             Ok(Header {
+                file_type: FileType::EXECUTABLE,
                 machine: Machine::X86_64,
                 entry: VirtualAddress::new(0xffff_ffff_8000_0000),
                 program_header_offset: 64,
@@ -251,27 +258,20 @@ mod tests {
     }
 
     #[test]
-    fn rejects_shared_objects() {
+    fn reports_file_type_and_machine_as_values() {
         let mut raw = header(0);
         raw.file_type = 3;
-        assert_eq!(Header::parse(&image(&raw, &[], &[])), Err(ElfError::Type));
-    }
-
-    #[test]
-    fn knows_both_machines_and_no_other() {
-        let mut raw = header(0);
         raw.machine = 183;
-        assert_eq!(
-            Header::parse(&image(&raw, &[], &[])).map(|header| header.machine),
-            Ok(Machine::Aarch64)
-        );
+        let header = Header::parse(&image(&raw, &[], &[])).unwrap();
+        assert_eq!(header.file_type, FileType::SHARED_OBJECT);
+        assert_eq!(header.machine, Machine::AARCH64);
+
+        raw.file_type = 0xfe00;
         raw.machine = 3;
-        assert_eq!(
-            Header::parse(&image(&raw, &[], &[])),
-            Err(ElfError::Machine)
-        );
-        assert_eq!(Machine::X86_64.code(), 62);
-        assert_eq!(Machine::Aarch64.code(), 183);
+        let header = Header::parse(&image(&raw, &[], &[])).unwrap();
+        assert_eq!(header.file_type.code(), 0xfe00);
+        assert_eq!(header.machine.code(), 3);
+        assert_ne!(header.machine, Machine::X86_64);
     }
 
     #[test]

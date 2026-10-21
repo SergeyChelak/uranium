@@ -11,7 +11,7 @@ structure! {
         pub(crate) flags: u32,
         pub(crate) offset: u64,
         pub(crate) virtual_address: VirtualAddress,
-        pub(crate) physical_address: u64,
+        pub(crate) physical_address: u64,       // not always physical address, so keep u64
         pub(crate) file_size: u64,
         pub(crate) memory_size: u64,
         pub(crate) alignment: u64,
@@ -33,35 +33,49 @@ layout!(RawProgramHeader, RawProgramHeader::SIZE, {
     alignment: 48,
 });
 
-// ELF-64 1.5 Draft 2, Table 16
-const LOADABLE: u32 = 1;
 // ELF-64 1.5 Draft 2, Table 17
 const EXECUTE: u32 = 0x1;
 const WRITE: u32 = 0x2;
 const READ: u32 = 0x4;
 
-/// A loadable segment: `file_size` bytes at `offset` in the file become the
-/// first bytes of `memory_size` at `virtual_address`, the rest are zero
+/// The `p_type` code: what a program header entry describes. Ranges are
+/// left to operating systems and processors, so any code is a value and
+/// the named ones are those the base document defines
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SegmentKind(u32);
+
+impl SegmentKind {
+    // ELF-64 1.5 Draft 2, Table 16
+    pub const NULL: Self = Self(0);
+    pub const LOAD: Self = Self(1);
+    pub const DYNAMIC: Self = Self(2);
+    pub const INTERPRETER: Self = Self(3);
+    pub const NOTE: Self = Self(4);
+    pub const PROGRAM_HEADER_TABLE: Self = Self(6);
+
+    pub const fn code(self) -> u32 {
+        self.0
+    }
+}
+
+/// One entry of the program header table: `file_size` bytes at `offset` in
+/// the file describe `memory_size` bytes at `virtual_address`; for a
+/// loadable segment the bytes beyond the file's are zero
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Segment {
+    pub kind: SegmentKind,
     pub virtual_address: VirtualAddress,
     pub offset: u64,
     pub file_size: u64,
     pub memory_size: u64,
+    pub alignment: u64,
     pub readable: bool,
     pub writable: bool,
     pub executable: bool,
 }
 
 impl Segment {
-    /// `None` for an entry that is not a loadable segment
-    fn from_raw(raw: &RawProgramHeader, file_length: usize) -> Result<Option<Self>, ElfError> {
-        if raw.segment_type != LOADABLE {
-            return Ok(None);
-        }
-        if raw.memory_size < raw.file_size {
-            return Err(ElfError::SegmentSize);
-        }
+    fn from_raw(raw: &RawProgramHeader, file_length: usize) -> Result<Self, ElfError> {
         let end = raw
             .offset
             .checked_add(raw.file_size)
@@ -69,39 +83,84 @@ impl Segment {
         if usize::try_from(end).map_or(true, |end| end > file_length) {
             return Err(ElfError::Truncated);
         }
-        Ok(Some(Self {
+        let kind = SegmentKind(raw.segment_type);
+        if kind == SegmentKind::LOAD
+            && (raw.memory_size < raw.file_size
+                || raw.virtual_address.checked_add(raw.memory_size).is_none())
+        {
+            return Err(ElfError::SegmentSize);
+        }
+        Ok(Self {
+            kind,
             virtual_address: raw.virtual_address,
             offset: raw.offset,
             file_size: raw.file_size,
             memory_size: raw.memory_size,
+            alignment: raw.alignment,
             readable: raw.flags & READ != 0,
             writable: raw.flags & WRITE != 0,
             executable: raw.flags & EXECUTE != 0,
-        }))
+        })
+    }
+
+    /// The address just past the segment's memory
+    pub fn end(&self) -> VirtualAddress {
+        self.virtual_address + self.memory_size
+    }
+
+    pub fn contains(&self, address: VirtualAddress) -> bool {
+        self.virtual_address <= address && address < self.end()
     }
 }
 
 impl Header {
-    /// The loadable segments of the file the header came from, in table
-    /// order; other entry types are skipped, and an entry or a segment that
-    /// reaches past `bytes` is an error in its place
-    pub fn load_segments<'a>(
+    /// Every entry of the program header table of the file the header came
+    /// from, in table order; an entry or a segment that reaches past
+    /// `bytes` is an error in its place
+    pub fn segments<'a>(
         &self,
         bytes: &'a [u8],
     ) -> impl Iterator<Item = Result<Segment, ElfError>> + 'a {
         let offset = self.program_header_offset;
         let entry_size = u64::from(self.program_header_entry_size);
-        (0..u64::from(self.program_header_count))
-            .map(move |index| {
-                let start = offset
-                    .checked_add(index.saturating_mul(entry_size))
-                    .and_then(|start| usize::try_from(start).ok())
-                    .ok_or(ElfError::Truncated)?;
-                let entry = bytes.get(start..).ok_or(ElfError::Truncated)?;
-                let raw = RawProgramHeader::decode(&mut Decoder::new(entry))?;
-                Segment::from_raw(&raw, bytes.len())
-            })
-            .filter_map(Result::transpose)
+        (0..u64::from(self.program_header_count)).map(move |index| {
+            let start = offset
+                .checked_add(index.saturating_mul(entry_size))
+                .and_then(|start| usize::try_from(start).ok())
+                .ok_or(ElfError::Truncated)?;
+            let entry = bytes.get(start..).ok_or(ElfError::Truncated)?;
+            let raw = RawProgramHeader::decode(&mut Decoder::new(entry))?;
+            Segment::from_raw(&raw, bytes.len())
+        })
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod testing {
+    use address::VirtualAddress;
+
+    use super::{RawProgramHeader, SegmentKind};
+
+    /// An entry of `kind`: `file_size` bytes at `offset` in the file,
+    /// `memory_size` bytes at `virtual_address`
+    pub(crate) fn segment(
+        kind: SegmentKind,
+        virtual_address: u64,
+        offset: u64,
+        file_size: u64,
+        memory_size: u64,
+        flags: u32,
+    ) -> RawProgramHeader {
+        RawProgramHeader {
+            segment_type: kind.code(),
+            flags,
+            offset,
+            virtual_address: VirtualAddress::new(virtual_address),
+            physical_address: 0,
+            file_size,
+            memory_size,
+            alignment: 0x1000,
+        }
     }
 }
 
@@ -109,44 +168,65 @@ impl Header {
 mod tests {
     use std::vec::Vec;
 
+    use super::testing::segment;
     use super::*;
     use crate::header::testing::{header, image};
 
     fn loadable(offset: u64, file_size: u64, memory_size: u64, flags: u32) -> RawProgramHeader {
-        RawProgramHeader {
-            segment_type: LOADABLE,
-            flags,
+        segment(
+            SegmentKind::LOAD,
+            0xffff_ffff_8000_0000 + offset,
             offset,
-            virtual_address: VirtualAddress::new(0xffff_ffff_8000_0000 + offset),
-            physical_address: 0,
             file_size,
             memory_size,
-            alignment: 0x1000,
-        }
+            flags,
+        )
     }
 
     fn segments(bytes: &[u8]) -> Vec<Result<Segment, ElfError>> {
-        Header::parse(bytes).unwrap().load_segments(bytes).collect()
+        Header::parse(bytes).unwrap().segments(bytes).collect()
     }
 
     #[test]
-    fn load_segments_skips_other_types() {
-        let mut note = loadable(0, 0, 0, 0);
-        note.segment_type = 4;
-        let text = loadable(176, 8, 8, READ | EXECUTE);
-        let bytes = image(&header(2), &[note, text], &[7u8; 8]);
+    fn segments_report_every_kind() {
+        let interpreter = segment(SegmentKind::INTERPRETER, 0, 176, 4, 4, READ);
+        let text = loadable(180, 4, 4, READ | EXECUTE);
+        let bytes = image(&header(2), &[interpreter, text], b"ld.\0\x90\x90\x90\x90");
         assert_eq!(
             segments(&bytes),
-            [Ok(Segment {
-                virtual_address: VirtualAddress::new(0xffff_ffff_8000_00b0),
-                offset: 176,
-                file_size: 8,
-                memory_size: 8,
-                readable: true,
-                writable: false,
-                executable: true,
-            })]
+            [
+                Ok(Segment {
+                    kind: SegmentKind::INTERPRETER,
+                    virtual_address: VirtualAddress::new(0),
+                    offset: 176,
+                    file_size: 4,
+                    memory_size: 4,
+                    alignment: 0x1000,
+                    readable: true,
+                    writable: false,
+                    executable: false,
+                }),
+                Ok(Segment {
+                    kind: SegmentKind::LOAD,
+                    virtual_address: VirtualAddress::new(0xffff_ffff_8000_00b4),
+                    offset: 180,
+                    file_size: 4,
+                    memory_size: 4,
+                    alignment: 0x1000,
+                    readable: true,
+                    writable: false,
+                    executable: true,
+                }),
+            ]
         );
+    }
+
+    #[test]
+    fn an_unknown_kind_is_a_value() {
+        let mut note = loadable(120, 0, 0, 0);
+        note.segment_type = 0x6474_e551;
+        let bytes = image(&header(1), &[note], &[]);
+        assert_eq!(segments(&bytes)[0].unwrap().kind.code(), 0x6474_e551);
     }
 
     #[test]
@@ -177,14 +257,18 @@ mod tests {
         let text = loadable(120, 8, 8, READ);
         let bytes = image(&header(1), &[text], &[0u8; 8]);
         let header = Header::parse(&bytes).unwrap();
-        let cut: Vec<Result<Segment, ElfError>> = header.load_segments(&bytes[..100]).collect();
+        let cut: Vec<Result<Segment, ElfError>> = header.segments(&bytes[..100]).collect();
         assert_eq!(cut, [Err(ElfError::Truncated)]);
     }
 
     #[test]
-    fn a_segment_past_the_file_is_truncated() {
+    fn an_entry_past_the_file_is_truncated_whatever_its_kind() {
         let text = loadable(120, 16, 16, READ);
         let bytes = image(&header(1), &[text], &[0u8; 8]);
+        assert_eq!(segments(&bytes), [Err(ElfError::Truncated)]);
+        let mut note = loadable(120, 16, 16, READ);
+        note.segment_type = SegmentKind::NOTE.code();
+        let bytes = image(&header(1), &[note], &[0u8; 8]);
         assert_eq!(segments(&bytes), [Err(ElfError::Truncated)]);
     }
 
@@ -193,5 +277,24 @@ mod tests {
         let text = loadable(120, 8, 4, READ);
         let bytes = image(&header(1), &[text], &[0u8; 8]);
         assert_eq!(segments(&bytes), [Err(ElfError::SegmentSize)]);
+    }
+
+    #[test]
+    fn memory_past_the_end_of_the_address_space_is_an_error() {
+        let text = segment(SegmentKind::LOAD, u64::MAX - 7, 120, 8, 16, READ);
+        let bytes = image(&header(1), &[text], &[0u8; 8]);
+        assert_eq!(segments(&bytes), [Err(ElfError::SegmentSize)]);
+    }
+
+    #[test]
+    fn a_segment_contains_its_memory_and_not_the_address_after_it() {
+        let text = loadable(120, 8, 16, READ);
+        let bytes = image(&header(1), &[text], &[0u8; 8]);
+        let segment = segments(&bytes).remove(0).unwrap();
+        assert_eq!(segment.end(), VirtualAddress::new(0xffff_ffff_8000_0088));
+        assert!(segment.contains(VirtualAddress::new(0xffff_ffff_8000_0078)));
+        assert!(segment.contains(VirtualAddress::new(0xffff_ffff_8000_0087)));
+        assert!(!segment.contains(VirtualAddress::new(0xffff_ffff_8000_0088)));
+        assert!(!segment.contains(VirtualAddress::new(0xffff_ffff_8000_0077)));
     }
 }
