@@ -1,14 +1,38 @@
 use address::VirtualAddress;
-use byte_fields::{Decode, Decoder, layout, structure};
+use byte_fields::{layout, structure};
 
 use crate::ElfError;
-use crate::program_header::RawProgramHeader;
+
+structure! {
+    /// The identification bytes that open the file, `e_ident`, with the
+    /// `EI_*` indices of the specification turned into fields
+    pub(crate) struct RawIdentification {
+        pub(crate) magic: [u8; 4],
+        pub(crate) class: u8,
+        pub(crate) data: u8,
+        pub(crate) version: u8,
+        pub(crate) os_abi: u8,
+        pub(crate) abi_version: u8,
+        pub(crate) padding: [u8; 7],
+    }
+}
+
+// ELF-64 1.5 Draft 2, Table 2
+layout!(RawIdentification, 16, align 1, {
+    magic: 0,
+    class: 4,
+    data: 5,
+    version: 6,
+    os_abi: 7,
+    abi_version: 8,
+    padding: 9,
+});
 
 structure! {
     /// The file header, with the ELF names spelled out: `identification` is
     /// `e_ident`, `program_header_offset` is `e_phoff`, and so on
     pub(crate) struct RawHeader {
-        pub(crate) identification: [u8; 16],
+        pub(crate) identification: RawIdentification,
         pub(crate) file_type: u16,
         pub(crate) machine: u16,
         pub(crate) version: u32,
@@ -42,18 +66,34 @@ layout!(RawHeader, 64, {
     section_name_table_index: 62,
 });
 
-// ELF-64 1.5 Draft 2, section 3: e_ident[0..4]
+// ELF-64 1.5 Draft 2, section 3: e_ident[EI_MAG0] through e_ident[EI_MAG3]
 const MAGIC: [u8; 4] = *b"\x7fELF";
-// ELF-64 1.5 Draft 2, Table 2: indices into e_ident
-const CLASS: usize = 4;
-const DATA: usize = 5;
-const IDENTIFICATION_VERSION: usize = 6;
 // ELF-64 1.5 Draft 2, Table 3
 const CLASS_64: u8 = 2;
 // ELF-64 1.5 Draft 2, Table 4
 const DATA_LITTLE_ENDIAN: u8 = 1;
 // ELF-64 1.5 Draft 2, section 3: EV_CURRENT
-const CURRENT_VERSION: u32 = 1;
+pub(crate) const CURRENT_VERSION: u32 = 1;
+
+impl RawIdentification {
+    /// Whether this crate can read the file: ELF, 64-bit, little-endian, of
+    /// the current version
+    pub(crate) fn check(&self) -> Result<(), ElfError> {
+        if self.magic != MAGIC {
+            return Err(ElfError::NotElf);
+        }
+        if self.class != CLASS_64 {
+            return Err(ElfError::Not64Bit);
+        }
+        if self.data != DATA_LITTLE_ENDIAN {
+            return Err(ElfError::NotLittleEndian);
+        }
+        if u32::from(self.version) != CURRENT_VERSION {
+            return Err(ElfError::UnknownVersion);
+        }
+        Ok(())
+    }
+}
 
 /// The `e_type` code: what kind of object the file is. The specification
 /// leaves ranges to operating systems and processors, so any code is a
@@ -90,217 +130,20 @@ impl Machine {
     }
 }
 
-/// What the file header says, read as values; the only checks are that the
-/// file is one this crate can read and that it is consistent with itself
+/// What the file header says about the file as a whole
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Header {
     pub file_type: FileType,
     pub machine: Machine,
     pub entry: VirtualAddress,
-    pub(crate) program_header_offset: u64,
-    pub(crate) program_header_entry_size: u16,
-    pub(crate) program_header_count: u16,
 }
 
 impl Header {
-    /// Reads the header at the start of `bytes`: a 64-bit little-endian
-    /// file of the current version, whose program header table lies within
-    /// `bytes`
-    pub fn parse(bytes: &[u8]) -> Result<Self, ElfError> {
-        let raw = RawHeader::decode(&mut Decoder::new(bytes))?;
-        let identification = raw.identification;
-        if identification[..MAGIC.len()] != MAGIC {
-            return Err(ElfError::Magic);
-        }
-        if identification[CLASS] != CLASS_64 {
-            return Err(ElfError::Class);
-        }
-        if identification[DATA] != DATA_LITTLE_ENDIAN {
-            return Err(ElfError::Endianness);
-        }
-        if u32::from(identification[IDENTIFICATION_VERSION]) != CURRENT_VERSION
-            || raw.version != CURRENT_VERSION
-        {
-            return Err(ElfError::Version);
-        }
-        if usize::from(raw.program_header_entry_size) < RawProgramHeader::SIZE {
-            return Err(ElfError::ProgramHeaderSize);
-        }
-        let header = Self {
+    pub(crate) fn from_raw(raw: &RawHeader) -> Self {
+        Self {
             file_type: FileType(raw.file_type),
             machine: Machine(raw.machine),
             entry: raw.entry,
-            program_header_offset: raw.program_header_offset,
-            program_header_entry_size: raw.program_header_entry_size,
-            program_header_count: raw.program_header_count,
-        };
-        if header.program_header_table_end() > bytes.len() {
-            return Err(ElfError::Truncated);
         }
-        Ok(header)
-    }
-
-    /// Where the program header table ends, saturating so that an absurd
-    /// offset reads as "past any file"
-    fn program_header_table_end(&self) -> usize {
-        let size = usize::from(self.program_header_entry_size)
-            .saturating_mul(usize::from(self.program_header_count));
-        usize::try_from(self.program_header_offset)
-            .map_or(usize::MAX, |offset| offset.saturating_add(size))
-    }
-}
-
-#[cfg(test)]
-pub(crate) mod testing {
-    use std::vec::Vec;
-
-    use address::VirtualAddress;
-    use byte_fields::Encoder;
-
-    use super::RawHeader;
-    use crate::program_header::RawProgramHeader;
-
-    /// A header for `program_headers` that start right behind the header
-    pub(crate) fn header(program_headers: usize) -> RawHeader {
-        RawHeader {
-            identification: *b"\x7fELF\x02\x01\x01\0\0\0\0\0\0\0\0\0",
-            file_type: 2,
-            machine: 62,
-            version: 1,
-            entry: VirtualAddress::new(0xffff_ffff_8000_0000),
-            program_header_offset: 64,
-            section_header_offset: 0,
-            flags: 0,
-            header_size: 64,
-            program_header_entry_size: 56,
-            program_header_count: u16::try_from(program_headers).unwrap(),
-            section_header_entry_size: 64,
-            section_header_count: 0,
-            section_name_table_index: 0,
-        }
-    }
-
-    /// The header, then the program headers, then `body` as the segment bytes
-    pub(crate) fn image(
-        header: &RawHeader,
-        program_headers: &[RawProgramHeader],
-        body: &[u8],
-    ) -> Vec<u8> {
-        let entry_size = usize::from(header.program_header_entry_size);
-        let mut bytes = std::vec![0u8; 64 + program_headers.len() * entry_size + body.len()];
-        let mut encoder = Encoder::new(&mut bytes);
-        encoder.write(header).unwrap();
-        for program_header in program_headers {
-            let start = encoder.position();
-            encoder.write(program_header).unwrap();
-            encoder
-                .bytes(&std::vec![0u8; start + entry_size - encoder.position()])
-                .unwrap();
-        }
-        encoder.bytes(body).unwrap();
-        bytes
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::testing::{header, image};
-    use super::*;
-
-    #[test]
-    fn parses_a_minimal_header() {
-        let bytes = image(&header(0), &[], &[]);
-        assert_eq!(
-            Header::parse(&bytes),
-            Ok(Header {
-                file_type: FileType::EXECUTABLE,
-                machine: Machine::X86_64,
-                entry: VirtualAddress::new(0xffff_ffff_8000_0000),
-                program_header_offset: 64,
-                program_header_entry_size: 56,
-                program_header_count: 0,
-            })
-        );
-    }
-
-    #[test]
-    fn rejects_a_bad_magic() {
-        let mut bytes = image(&header(0), &[], &[]);
-        bytes[1] = b'3';
-        assert_eq!(Header::parse(&bytes), Err(ElfError::Magic));
-    }
-
-    #[test]
-    fn rejects_32_bit() {
-        let mut bytes = image(&header(0), &[], &[]);
-        bytes[4] = 1;
-        assert_eq!(Header::parse(&bytes), Err(ElfError::Class));
-    }
-
-    #[test]
-    fn rejects_big_endian() {
-        let mut bytes = image(&header(0), &[], &[]);
-        bytes[5] = 2;
-        assert_eq!(Header::parse(&bytes), Err(ElfError::Endianness));
-    }
-
-    #[test]
-    fn rejects_another_version() {
-        let mut bytes = image(&header(0), &[], &[]);
-        bytes[6] = 2;
-        assert_eq!(Header::parse(&bytes), Err(ElfError::Version));
-        let mut raw = header(0);
-        raw.version = 2;
-        assert_eq!(
-            Header::parse(&image(&raw, &[], &[])),
-            Err(ElfError::Version)
-        );
-    }
-
-    #[test]
-    fn reports_file_type_and_machine_as_values() {
-        let mut raw = header(0);
-        raw.file_type = 3;
-        raw.machine = 183;
-        let header = Header::parse(&image(&raw, &[], &[])).unwrap();
-        assert_eq!(header.file_type, FileType::SHARED_OBJECT);
-        assert_eq!(header.machine, Machine::AARCH64);
-
-        raw.file_type = 0xfe00;
-        raw.machine = 3;
-        let header = Header::parse(&image(&raw, &[], &[])).unwrap();
-        assert_eq!(header.file_type.code(), 0xfe00);
-        assert_eq!(header.machine.code(), 3);
-        assert_ne!(header.machine, Machine::X86_64);
-    }
-
-    #[test]
-    fn rejects_a_short_program_header_entry() {
-        let mut raw = header(0);
-        raw.program_header_entry_size = 55;
-        assert_eq!(
-            Header::parse(&image(&raw, &[], &[])),
-            Err(ElfError::ProgramHeaderSize)
-        );
-    }
-
-    #[test]
-    fn a_short_file_is_truncated() {
-        let bytes = image(&header(0), &[], &[]);
-        assert_eq!(Header::parse(&bytes[..63]), Err(ElfError::Truncated));
-    }
-
-    #[test]
-    fn a_program_header_table_past_the_file_is_truncated() {
-        let mut raw = header(2);
-        raw.program_header_count = 3;
-        let bytes = image(&raw, &[], &[0u8; 2 * 56]);
-        assert_eq!(Header::parse(&bytes), Err(ElfError::Truncated));
-        raw.program_header_count = 2;
-        raw.program_header_offset = u64::MAX;
-        assert_eq!(
-            Header::parse(&image(&raw, &[], &[])),
-            Err(ElfError::Truncated)
-        );
     }
 }

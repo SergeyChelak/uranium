@@ -42,6 +42,17 @@ impl<'a> Fields<'a> {
         self.0.get(offset..).ok_or(OutOfBounds)
     }
 
+    /// The `length` bytes from `offset`, both as a file format states them,
+    /// or `OutOfBounds` when they reach past the end
+    pub fn window(self, offset: u64, length: u64) -> Result<Self, OutOfBounds> {
+        let start = usize::try_from(offset).map_err(|_| OutOfBounds)?;
+        let end = usize::try_from(length)
+            .ok()
+            .and_then(|length| start.checked_add(length))
+            .ok_or(OutOfBounds)?;
+        self.0.get(start..end).map(Self).ok_or(OutOfBounds)
+    }
+
     pub fn starts_with(self, prefix: &[u8]) -> bool {
         self.0.starts_with(prefix)
     }
@@ -107,5 +118,15 @@ mod tests {
         let mut decoder = Fields::new(&BYTES).at(5);
         assert_eq!(decoder.read::<u8>(), Ok(1));
         assert_eq!(decoder.position(), 6);
+    }
+
+    #[test]
+    fn window_cuts_by_format_coordinates() {
+        let fields = Fields::new(&[1, 2, 3, 4, 5]);
+        assert_eq!(fields.window(1, 3).map(Fields::bytes), Ok(&[2, 3, 4][..]));
+        assert_eq!(fields.window(5, 0).map(Fields::bytes), Ok(&[][..]));
+        assert_eq!(fields.window(3, 3).err(), Some(OutOfBounds));
+        assert_eq!(fields.window(u64::MAX, 1).err(), Some(OutOfBounds));
+        assert_eq!(fields.window(1, u64::MAX).err(), Some(OutOfBounds));
     }
 }
