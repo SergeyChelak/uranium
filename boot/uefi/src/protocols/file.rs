@@ -1,11 +1,12 @@
 use core::ffi::c_void;
+use core::marker::PhantomData;
 use core::mem::{MaybeUninit, offset_of, size_of};
 use core::ptr::{self, NonNull};
 
 use crate::firmware_pointer::UnusedFunctionPointer;
 use crate::protocols::file_information::{FILE_INFORMATION_ID, FileInformationBuffer};
 use crate::ucs2::encode_terminated;
-use crate::{Guid, Status};
+use crate::{Guid, SimpleFileSystemProtocol, Status};
 
 // UEFI 2.11, 13.5.2
 type OpenFunction = unsafe extern "efiapi" fn(
@@ -47,26 +48,40 @@ pub(crate) struct FileProtocol {
     get_info: GetInfoFunction,
 }
 
-/// An open file or directory; closed on drop
-pub struct File {
+/// An open file or directory, closed on drop; it never outlives the file
+/// system it was opened from:
+///
+/// ```compile_fail,E0597
+/// let root;
+/// {
+///     let file_system: Option<uefi::SimpleFileSystemProtocol> = None;
+///     root = file_system.as_ref().map(uefi::SimpleFileSystemProtocol::open_volume);
+/// }
+/// drop(root);
+/// ```
+pub struct File<'b> {
     protocol: NonNull<FileProtocol>,
+    file_system: PhantomData<&'b SimpleFileSystemProtocol>,
 }
 
-impl File {
+impl<'b> File<'b> {
     /// Takes ownership of a file handle the firmware opened; `None` when it
     /// is null
     ///
     /// # Safety
     ///
-    /// `protocol` must be what the firmware wrote for `OpenVolume` or `Open`,
-    /// and nobody else may close it
-    pub(crate) unsafe fn from_raw(protocol: *const FileProtocol) -> Option<File> {
-        NonNull::new(protocol.cast_mut()).map(|protocol| File { protocol })
+    /// `protocol` must be what the firmware wrote for `OpenVolume` or `Open`
+    /// on a file system that lives for `'b`, and nobody else may close it
+    pub(crate) unsafe fn from_raw(protocol: *const FileProtocol) -> Option<File<'b>> {
+        NonNull::new(protocol.cast_mut()).map(|protocol| File {
+            protocol,
+            file_system: PhantomData,
+        })
     }
 
     /// Opens `path` (UEFI form, `\` separators) for reading relative to this
     /// directory
-    pub fn open(&self, path: &str) -> Result<File, Status> {
+    pub fn open(&self, path: &str) -> Result<File<'b>, Status> {
         let mut buffer = [0; PATH_CAPACITY + 1];
         let name = encode_terminated(path, &mut buffer).ok_or(Status::INVALID_PARAMETER)?;
         let mut opened: *const FileProtocol = ptr::null();
@@ -119,7 +134,7 @@ impl File {
     }
 }
 
-impl Drop for File {
+impl Drop for File<'_> {
     fn drop(&mut self) {
         // SAFETY: the handle is still open, and nothing uses it after this call
         unsafe { (self.protocol().close)(self.as_raw()) };
@@ -280,7 +295,7 @@ mod tests {
         }
     }
 
-    fn file_over(table: &mut FileProtocol) -> File {
+    fn file_over(table: &mut FileProtocol) -> File<'_> {
         // SAFETY: the test keeps `table` alive and leaves it alone while the file lives
         unsafe { File::from_raw(table) }.unwrap()
     }

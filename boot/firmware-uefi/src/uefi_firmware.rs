@@ -35,7 +35,7 @@ impl<'a> UefiFirmware<'a> {
 impl<'a> Firmware for UefiFirmware<'a> {
     type TextConsole = TextConsole<'a>;
     type SerialConsole = SerialConsole<'a>;
-    type Volume = UefiVolume;
+    type Volume = UefiVolume<'a>;
     type Memory = UefiMemory<'a>;
     type Platform = UefiPlatform<'a>;
 
@@ -58,7 +58,7 @@ impl<'a> Firmware for UefiFirmware<'a> {
         }
     }
 
-    fn boot_volume(&self) -> Result<UefiVolume, FileError> {
+    fn boot_volume(&self) -> Result<UefiVolume<'a>, FileError> {
         let boot_services = self.system_table.boot_services();
         let image = boot_services
             .handle_protocol::<LoadedImageProtocol>(self.image)

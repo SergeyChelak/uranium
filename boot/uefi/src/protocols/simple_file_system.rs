@@ -28,7 +28,7 @@ unsafe impl Protocol for SimpleFileSystemProtocol {
 
 impl SimpleFileSystemProtocol {
     /// Opens the root directory of the volume
-    pub fn open_volume(&self) -> Result<File, Status> {
+    pub fn open_volume(&self) -> Result<File<'_>, Status> {
         let mut root: *const FileProtocol = ptr::null();
         // SAFETY: `self` lives in a firmware protocol instance that is valid
         // while boot services run, and `root` outlives the call

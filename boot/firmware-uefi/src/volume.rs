@@ -1,32 +1,32 @@
 use firmware::{FileError, Volume};
 use uefi::Status;
 
-pub struct UefiVolume {
-    root: uefi::File,
+pub struct UefiVolume<'b> {
+    root: uefi::File<'b>,
 }
 
-impl UefiVolume {
-    pub(crate) fn new(root: uefi::File) -> Self {
+impl<'b> UefiVolume<'b> {
+    pub(crate) fn new(root: uefi::File<'b>) -> Self {
         Self { root }
     }
 }
 
-impl Volume for UefiVolume {
-    type File = UefiFile;
+impl<'b> Volume for UefiVolume<'b> {
+    type File = UefiFile<'b>;
 
-    fn open(&self, path: &str) -> Result<UefiFile, FileError> {
+    fn open(&self, path: &str) -> Result<UefiFile<'b>, FileError> {
         let file = self.root.open(path).map_err(open_error)?;
         let size = file.size().map_err(|_| FileError::Device)?;
         Ok(UefiFile { file, size })
     }
 }
 
-pub struct UefiFile {
-    file: uefi::File,
+pub struct UefiFile<'b> {
+    file: uefi::File<'b>,
     size: u64,
 }
 
-impl firmware::File for UefiFile {
+impl firmware::File for UefiFile<'_> {
     fn size(&self) -> u64 {
         self.size
     }
