@@ -80,6 +80,7 @@ dependencies = [
 name = "firmware"
 version = "0.1.0"
 dependencies = [
+ "acpi-tables",
  "address",
 ]
 
@@ -87,6 +88,7 @@ dependencies = [
 name = "firmware-uefi"
 version = "0.1.0"
 dependencies = [
+ "acpi-tables",
  "address",
  "firmware",
  "uefi",

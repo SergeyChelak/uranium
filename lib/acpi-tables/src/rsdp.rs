@@ -54,16 +54,14 @@ impl Rsdp {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod testing {
     use std::vec::Vec;
 
-    use address::PhysicalAddress;
-
     use super::Rsdp;
-    use crate::AcpiError;
     use crate::header::testing::with_checksum;
 
-    fn rsdp(revision: u8, length: u32, xsdt: u64) -> Vec<u8> {
+    /// A root pointer with both checksums in place
+    pub(crate) fn rsdp(revision: u8, length: u32, xsdt: u64) -> Vec<u8> {
         let mut bytes = [0u8; Rsdp::LENGTH];
         bytes[..8].copy_from_slice(b"RSD PTR ");
         bytes[15] = revision;
@@ -73,6 +71,15 @@ mod tests {
         first.extend_from_slice(&bytes[20..]);
         with_checksum(first, 32)
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use address::PhysicalAddress;
+
+    use super::Rsdp;
+    use super::testing::rsdp;
+    use crate::AcpiError;
 
     #[test]
     fn rsdp_points_at_the_xsdt() {

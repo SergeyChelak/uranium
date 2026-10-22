@@ -1,7 +1,8 @@
 //! Readers for the ACPI tables the loader follows: the root pointer, the
 //! extended system description table and the serial port console redirection
-//! table. Every reader works on a byte copy the caller took out of firmware
-//! memory, so nothing here touches an address or assumes alignment.
+//! table. Every parser works on bytes the caller took out of firmware memory,
+//! and the lookup follows addresses only through a `TableReader` the caller
+//! provides, so nothing here touches memory or assumes alignment.
 
 #![no_std]
 
@@ -10,12 +11,14 @@ extern crate std;
 
 mod generic_address;
 mod header;
+mod lookup;
 mod rsdp;
 mod spcr;
 mod xsdt;
 
 pub use generic_address::{AddressSpace, GenericAddress};
 pub use header::TableHeader;
+pub use lookup::TableReader;
 pub use rsdp::Rsdp;
 pub use spcr::{SerialInterface, Spcr};
 pub use xsdt::Xsdt;
@@ -30,6 +33,10 @@ pub enum AcpiError {
     Revision,
     /// The buffer is shorter than the table, or the length field is impossible
     Length,
+    /// The address does not point at readable firmware memory
+    Address,
+    /// No table in the XSDT carries the requested signature
+    NotFound,
 }
 
 impl From<byte_fields::OutOfBounds> for AcpiError {

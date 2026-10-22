@@ -1,7 +1,7 @@
 #![no_std]
 #![expect(
     unsafe_code,
-    reason = "turns the pages the firmware allocates into slices and ends boot services"
+    reason = "turns the pages the firmware allocates and the tables it publishes into slices, and ends boot services"
 )]
 
 #[cfg(test)]

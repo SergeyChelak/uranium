@@ -1,5 +1,7 @@
-use core::ptr;
+use core::marker::PhantomData;
+use core::slice;
 
+use acpi_tables::{AcpiError, Spcr, TableReader};
 use address::{PhysicalAddress, VirtualAddress};
 use firmware::{Platform, PlatformError};
 use uefi::{ACPI_20_TABLE_GUID, Handle, LoadedImageProtocol, SystemTable, ucs2};
@@ -28,13 +30,10 @@ impl Platform for UefiPlatform<'_> {
             .find_configuration_table(ACPI_20_TABLE_GUID)
     }
 
-    fn read(&self, address: PhysicalAddress, buffer: &mut [u8]) -> Result<(), PlatformError> {
-        let source = source(address, buffer.len()).ok_or(PlatformError::Unreadable)?;
-        // SAFETY: `Platform::read` takes addresses the firmware provided, which
-        // boot services identity-map; `buffer` is the loader's own memory, so
-        // the two ranges are disjoint
-        unsafe { ptr::copy_nonoverlapping(source, buffer.as_mut_ptr(), buffer.len()) };
-        Ok(())
+    fn spcr(&self) -> Result<Spcr, PlatformError> {
+        let rsdp = self.rsdp().ok_or(PlatformError::MissingTable)?;
+        let tables = FirmwareTables::until_exit(self.system_table);
+        Ok(Spcr::find(&tables, rsdp)?)
     }
 
     fn load_options(&self, buffer: &mut [u8]) -> Result<usize, PlatformError> {
@@ -49,6 +48,33 @@ impl Platform for UefiPlatform<'_> {
             }
             None => Ok(0),
         }
+    }
+}
+
+/// The ACPI tables as the firmware left them: identity-mapped, never changed,
+/// and readable only while the system table is, so until boot services end
+struct FirmwareTables<'a> {
+    boot_services: PhantomData<&'a SystemTable>,
+}
+
+impl<'a> FirmwareTables<'a> {
+    fn until_exit(_system_table: &'a SystemTable) -> Self {
+        Self {
+            boot_services: PhantomData,
+        }
+    }
+}
+
+impl TableReader for FirmwareTables<'_> {
+    fn bytes(&self, address: PhysicalAddress, length: usize) -> Result<&[u8], AcpiError> {
+        let source = source(address, length).ok_or(AcpiError::Address)?;
+        // SAFETY: the lookup in `acpi-tables`, the only caller of this private
+        // type, derives every address from the firmware's chain of tables, which boot
+        // services identity-map and leave unchanged; `source` has excluded null
+        // and a wrapping range, `length` comes from a 32-bit table length, and
+        // the slice borrows `self`, which cannot outlive the system table that
+        // `exit_boot_services` consumes
+        Ok(unsafe { slice::from_raw_parts(source, length) })
     }
 }
 

@@ -9,6 +9,7 @@ publish.workspace = true
 layer = "boot/implementation"
 
 [dependencies]
+acpi-tables = { path = "../../lib/acpi-tables" }
 address = { path = "../../lib/address" }
 firmware = { path = "../firmware" }
 uefi = { path = "../uefi" }

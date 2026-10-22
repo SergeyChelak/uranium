@@ -12,6 +12,7 @@ layer = "boot/interface"
 checkpoints = []
 
 [dependencies]
+acpi-tables = { path = "../../lib/acpi-tables" }
 address = { path = "../../lib/address" }
 
 [lints]

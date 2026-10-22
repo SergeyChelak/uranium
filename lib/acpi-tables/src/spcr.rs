@@ -1,6 +1,9 @@
 //! The Serial Port Console Redirection table (SPCR): the ACPI table, defined
 //! by Microsoft, that describes the serial port meant for a console
 
+use address::PhysicalAddress;
+
+use crate::lookup::{TableReader, table_with_signature};
 use crate::{AcpiError, GenericAddress, TableHeader};
 
 // Microsoft SPCR 1.10, table layout
@@ -31,6 +34,11 @@ pub struct Spcr {
 }
 
 impl Spcr {
+    /// The table the firmware published, reached through RSDP and XSDT
+    pub fn find<R: TableReader>(reader: &R, rsdp: PhysicalAddress) -> Result<Self, AcpiError> {
+        Self::parse(table_with_signature(reader, rsdp, SIGNATURE)?)
+    }
+
     /// The fields after the base address describe settings the kernel's own
     /// driver decides, so they are not read
     pub fn parse(bytes: &[u8]) -> Result<Self, AcpiError> {
@@ -59,11 +67,16 @@ fn redirection_target(base: GenericAddress) -> Option<GenericAddress> {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
     use std::vec;
     use std::vec::Vec;
 
+    use address::PhysicalAddress;
+
     use super::{SerialInterface, Spcr};
     use crate::header::testing::table;
+    use crate::lookup::testing::{Tables, xsdt};
+    use crate::rsdp::testing::rsdp;
     use crate::{AcpiError, AddressSpace, GenericAddress};
 
     fn spcr(revision: u8, interface: u8, space: u8, raw_value: u64) -> Vec<u8> {
@@ -72,6 +85,20 @@ mod tests {
         body[4] = space;
         body[8..16].copy_from_slice(&raw_value.to_le_bytes());
         table(b"SPCR", revision, &body)
+    }
+
+    #[test]
+    fn spcr_find_follows_the_firmware_chain() {
+        let [rsdp_at, xsdt_at, spcr_at] = [0x1000, 0x2000, 0x3000].map(PhysicalAddress::new);
+        let tables = Tables(BTreeMap::from([
+            (rsdp_at, rsdp(2, 36, xsdt_at.as_u64())),
+            (xsdt_at, xsdt(&[spcr_at])),
+            (spcr_at, spcr(2, 3, 0, 0x0900_0000)),
+        ]));
+        assert_eq!(
+            Spcr::find(&tables, rsdp_at).map(|spcr| spcr.interface),
+            Ok(SerialInterface::Pl011)
+        );
     }
 
     #[test]
