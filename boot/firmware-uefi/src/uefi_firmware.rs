@@ -33,20 +33,29 @@ impl<'a> UefiFirmware<'a> {
 }
 
 impl<'a> Firmware for UefiFirmware<'a> {
-    type TextConsole = TextConsole<'a>;
-    type SerialConsole = SerialConsole<'a>;
-    type Volume = UefiVolume<'a>;
+    type TextConsole<'f>
+        = TextConsole<'f>
+    where
+        Self: 'f;
+    type SerialConsole<'f>
+        = SerialConsole<'f>
+    where
+        Self: 'f;
+    type Volume<'f>
+        = UefiVolume<'f>
+    where
+        Self: 'f;
     type Memory = UefiMemory<'a>;
     type Platform = UefiPlatform<'a>;
 
-    fn text_console(&self) -> Result<TextConsole<'a>, ConsoleError> {
+    fn text_console(&self) -> Result<TextConsole<'_>, ConsoleError> {
         self.system_table
             .console_out()
             .map(TextConsole::new)
             .ok_or(ConsoleError::Unavailable)
     }
 
-    fn serial_console(&self) -> Result<SerialConsole<'a>, ConsoleError> {
+    fn serial_console(&self) -> Result<SerialConsole<'_>, ConsoleError> {
         match self
             .system_table
             .boot_services()
@@ -58,7 +67,7 @@ impl<'a> Firmware for UefiFirmware<'a> {
         }
     }
 
-    fn boot_volume(&self) -> Result<UefiVolume<'a>, FileError> {
+    fn boot_volume(&self) -> Result<UefiVolume<'_>, FileError> {
         let boot_services = self.system_table.boot_services();
         let image = boot_services
             .handle_protocol::<LoadedImageProtocol>(self.image)

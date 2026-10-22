@@ -46,8 +46,9 @@ fn attempt(
         raw_descriptor_size: map.descriptor_size(),
         raw_descriptor_version: map.descriptor_version(),
     };
-    // SAFETY: the caller consumed its `UefiFirmware`, so after `Ok` nothing
-    // above the entry point can reach a boot service
+    // SAFETY: every console, volume and allocation borrows the `UefiFirmware`
+    // the caller consumed, so after `Ok` nothing above the entry point can
+    // reach a boot service
     match unsafe { boot_services.exit_boot_services(image, map.key()) } {
         Ok(()) => Ok(Attempt::Exited(summary)),
         Err(Status::INVALID_PARAMETER) => Ok(Attempt::StaleKey),
