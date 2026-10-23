@@ -171,7 +171,9 @@ mod tests {
         let mut units = Vec::new();
         for index in 0.. {
             // SAFETY: the string is null-terminated and the loop stops at the terminator
-            let unit = unsafe { *name.add(index) };
+            let unit_pointer = unsafe { name.add(index) };
+            // SAFETY: `unit_pointer` points inside the string, at or before its terminator
+            let unit = unsafe { unit_pointer.read() };
             if unit == 0 {
                 break;
             }

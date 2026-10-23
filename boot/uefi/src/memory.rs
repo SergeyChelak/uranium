@@ -190,7 +190,8 @@ mod tests {
 
     fn raw_map(descriptors: &[MemoryDescriptor]) -> Vec<u8> {
         let mut bytes = vec![0; descriptors.len() * STRIDE];
-        for (slot, descriptor) in bytes.chunks_exact_mut(STRIDE).zip(descriptors) {
+        let (slots, _) = bytes.as_chunks_mut::<STRIDE>();
+        for (slot, descriptor) in slots.iter_mut().zip(descriptors) {
             // SAFETY: `slot` holds `STRIDE` bytes, more than a descriptor needs
             unsafe {
                 slot.as_mut_ptr()
