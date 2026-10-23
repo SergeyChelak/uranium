@@ -51,7 +51,7 @@ impl<'a> Encoder<'a> {
             }
             _ => u16::try_from(u32::from(character)).unwrap_or(REPLACEMENT),
         };
-        self.after_carriage_return = unit == CARRIAGE_RETURN;
+        self.after_carriage_return = character == '\r';
         Some(unit)
     }
 }
@@ -122,6 +122,11 @@ mod tests {
     #[test]
     fn keeps_existing_carriage_return() {
         assert_eq!(encode("a\r\nb"), [units("a\r\nb")]);
+    }
+
+    #[test]
+    fn expands_consecutive_newlines() {
+        assert_eq!(encode("a\n\nb"), [units("a\r\n\r\nb")]);
     }
 
     #[test]
