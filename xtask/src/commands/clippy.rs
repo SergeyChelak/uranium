@@ -18,14 +18,22 @@ pub fn run(mut arguments: lexopt::Parser) -> anyhow::Result<()> {
         for target in targets_for(declaration.layer, declaration.architecture, &platforms) {
             let mut command = cargo::cargo(&workspace.root);
             command.args(["clippy", "--package", &package.name]);
-            match target {
-                Target::Host => command.arg("--all-targets"),
-                Target::Triple(triple) => command.args(["--target", triple]),
-            };
+            if let Target::Triple(triple) = target {
+                command.args(["--target", triple]);
+            }
             command.args(["--", "-D", "warnings"]);
             cargo::run(&mut command)?;
             println!("clippy {} ({target}): ok", package.name);
         }
     }
+    lint_tests(&workspace)
+}
+
+/// The tests of every crate build on the host, the same selection `host-tests` runs
+fn lint_tests(workspace: &Workspace) -> anyhow::Result<()> {
+    let mut command = cargo::cargo(&workspace.root);
+    command.args(["clippy", "--workspace", "--tests", "--", "-D", "warnings"]);
+    cargo::run(&mut command)?;
+    println!("clippy tests (host): ok");
     Ok(())
 }
