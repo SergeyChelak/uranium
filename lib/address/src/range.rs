@@ -12,8 +12,14 @@ macro_rules! range_type {
         }
 
         impl<S: PageSize> $name<S> {
-            pub fn new(start: $page<S>, count: u64) -> Self {
-                Self { start, count }
+            /// `None` when the range would reach past the top of the address space
+            pub fn new(start: $page<S>, count: u64) -> Option<Self> {
+                let pages_in_space = u64::MAX / S::SIZE + 1;
+                let fits = start
+                    .number()
+                    .checked_add(count)
+                    .is_some_and(|end| end <= pages_in_space);
+                fits.then_some(Self { start, count })
             }
 
             pub fn start(self) -> $page<S> {
@@ -80,13 +86,17 @@ range_type!(PageRange, PageIterator, Page);
 range_type!(FrameRange, FrameIterator, Frame);
 
 /// A large page is the range of the small pages it covers, and a range of
-/// small pages is a large page only when it is exactly that
+/// small pages is a large page only when it is exactly that; the large page
+/// lies within the address space, so its range is built without the check
 macro_rules! covers {
     ($range:ident, $page:ident, $large:ident, $small:ident) => {
         impl From<$page<$large>> for $range<$small> {
             fn from(large: $page<$large>) -> Self {
                 const FACTOR: u64 = $large::SIZE / $small::SIZE;
-                Self::new($page::from_number(large.number() * FACTOR), FACTOR)
+                Self {
+                    start: $page::from_number(large.number() * FACTOR),
+                    count: FACTOR,
+                }
             }
         }
 
@@ -116,13 +126,15 @@ mod tests {
     use super::{FrameRange, PageRange};
     use crate::{Frame, Page, PhysicalAddress, Size2MiB, Size4KiB, VirtualAddress};
 
+    const PAGES_IN_SPACE: u64 = 1 << 52;
+
     fn page(address: u64) -> Page<Size4KiB> {
         Page::containing(VirtualAddress::new(address))
     }
 
     #[test]
     fn iterates_every_page() {
-        let range = PageRange::new(page(0x1000), 3);
+        let range = PageRange::new(page(0x1000), 3).unwrap();
         let pages: Vec<Page> = range.into_iter().collect();
         assert_eq!(pages, [page(0x1000), page(0x2000), page(0x3000)]);
         assert_eq!(range.len(), 3);
@@ -131,7 +143,7 @@ mod tests {
 
     #[test]
     fn contains_excludes_the_end() {
-        let range = PageRange::new(page(0x1000), 3);
+        let range = PageRange::new(page(0x1000), 3).unwrap();
         assert!(!range.contains(page(0x0)));
         assert!(range.contains(page(0x1000)));
         assert!(range.contains(page(0x3fff)));
@@ -140,7 +152,7 @@ mod tests {
 
     #[test]
     fn an_empty_range_contains_nothing() {
-        let range = PageRange::new(page(0x1000), 0);
+        let range = PageRange::new(page(0x1000), 0).unwrap();
         assert!(range.is_empty());
         assert!(!range.contains(page(0x1000)));
         assert_eq!(range.into_iter().next(), None);
@@ -149,12 +161,25 @@ mod tests {
     #[test]
     fn iteration_reaches_the_last_page_of_the_space() {
         let last = page(u64::MAX);
-        let pages: Vec<Page> = PageRange::new(last, 1).into_iter().collect();
+        let pages: Vec<Page> = PageRange::new(last, 1).unwrap().into_iter().collect();
         assert_eq!(pages, [last]);
         assert_eq!(
             last.start_address(),
             VirtualAddress::new(0xffff_ffff_ffff_f000)
         );
+    }
+
+    #[test]
+    fn a_range_ending_at_the_top_of_the_space_is_accepted() {
+        assert!(PageRange::new(page(0), PAGES_IN_SPACE).is_some());
+        assert!(PageRange::new(page(u64::MAX), 1).is_some());
+    }
+
+    #[test]
+    fn a_range_reaching_past_the_top_of_the_space_is_refused() {
+        assert_eq!(PageRange::new(page(0), PAGES_IN_SPACE + 1), None);
+        assert_eq!(PageRange::new(page(u64::MAX), 2), None);
+        assert_eq!(PageRange::new(page(u64::MAX), u64::MAX), None);
     }
 
     #[test]
@@ -169,7 +194,7 @@ mod tests {
 
     #[test]
     fn a_full_aligned_small_range_is_a_large_page() {
-        let small = PageRange::new(page(0x40_0000), 512);
+        let small = PageRange::new(page(0x40_0000), 512).unwrap();
         assert_eq!(
             Page::<Size2MiB>::try_from(small),
             Ok(Page::containing(VirtualAddress::new(0x40_0000)))
@@ -178,23 +203,25 @@ mod tests {
 
     #[test]
     fn unaligned_small_range_is_not_a_large_page() {
-        let small = PageRange::new(page(0x40_1000), 512);
+        let small = PageRange::new(page(0x40_1000), 512).unwrap();
         assert_eq!(Page::<Size2MiB>::try_from(small), Err(small));
     }
 
     #[test]
     fn a_short_small_range_is_not_a_large_page() {
-        let small = PageRange::new(page(0x40_0000), 511);
+        let small = PageRange::new(page(0x40_0000), 511).unwrap();
         assert_eq!(Page::<Size2MiB>::try_from(small), Err(small));
     }
 
     #[test]
     fn frame_ranges_behave_the_same() {
         let first = Frame::<Size4KiB>::containing(PhysicalAddress::new(0x7fff_0000));
-        let range = FrameRange::new(first, 2);
+        let range = FrameRange::new(first, 2).unwrap();
         let frames: Vec<Frame> = range.into_iter().collect();
         assert_eq!(frames.len(), 2);
         assert_eq!(frames[1].start_address(), PhysicalAddress::new(0x7fff_1000));
+        let last = Frame::<Size4KiB>::containing(PhysicalAddress::new(u64::MAX));
+        assert_eq!(FrameRange::new(last, 2), None);
         let large = Frame::<Size2MiB>::containing(PhysicalAddress::new(0x20_0000));
         assert_eq!(FrameRange::<Size4KiB>::from(large).len(), 512);
     }
