@@ -97,7 +97,7 @@ impl<'a> BootInformation<'a> {
         if raw.version != RawBootInformation::VERSION {
             return Err(BootInformationError::Version);
         }
-        if raw.size < RawBootInformation::SIZE {
+        if raw.size != RawBootInformation::SIZE {
             return Err(BootInformationError::Size);
         }
         if raw.physical_map_base != L::PHYSICAL_MAP_BASE {
@@ -482,12 +482,12 @@ mod tests {
     }
 
     #[test]
-    fn decode_rejects_a_short_size_and_accepts_a_longer_one() {
+    fn decode_rejects_any_other_size() {
         let mut raw = valid();
-        raw.size = RawBootInformation::SIZE - 1;
-        assert_eq!(decode(&raw).err(), Some(BootInformationError::Size));
-        raw.size = RawBootInformation::SIZE + 64;
-        assert!(decode(&raw).is_ok());
+        for size in [RawBootInformation::SIZE - 1, RawBootInformation::SIZE + 64] {
+            raw.size = size;
+            assert_eq!(decode(&raw).err(), Some(BootInformationError::Size));
+        }
     }
 
     #[test]
