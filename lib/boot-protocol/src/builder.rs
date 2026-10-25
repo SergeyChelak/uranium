@@ -315,7 +315,7 @@ mod tests {
         assert_eq!(table.base, BLOCK_BASE + 264);
         assert_eq!(table.count, 2);
         let table_bytes = &block[264..264 + table.size() as usize];
-        let decoded: Vec<MemoryRegion> = information.memory_regions(table_bytes).collect();
+        let decoded: Vec<MemoryRegion> = information.memory_regions(table_bytes).unwrap().collect();
         assert_eq!(decoded, regions);
 
         let command_line = information.command_line().unwrap();

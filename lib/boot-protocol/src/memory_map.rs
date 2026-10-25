@@ -96,18 +96,11 @@ impl MemoryRegion {
     }
 }
 
-/// The regions of a table whose bytes the caller read, stepping by the
-/// entry size the loader wrote so that longer entries of a later version
-/// decode the same
-pub(crate) fn regions(
-    table: &[u8],
-    count: u64,
-    entry_size: usize,
-) -> impl Iterator<Item = MemoryRegion> + '_ {
-    let count = usize::try_from(count).unwrap_or(usize::MAX);
+/// The regions of a table given exactly its bytes, stepping by the entry
+/// size the table names rather than by the size of `RawMemoryRegion`
+pub(crate) fn regions(table: &[u8], entry_size: usize) -> impl Iterator<Item = MemoryRegion> + '_ {
     table
         .chunks_exact(entry_size)
-        .take(count)
         .filter_map(MemoryRegion::decode)
 }
 

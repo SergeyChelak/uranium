@@ -82,6 +82,12 @@ pub enum BootInformationError {
     MemoryMapEntrySize,
 }
 
+/// The caller gave `memory_regions` fewer bytes than the table occupies
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TableTooShort {
+    pub needed: u64,
+}
+
 /// The loader's hand-off, checked once by `decode` and read in place
 pub struct BootInformation<'a> {
     raw: &'a RawBootInformation,
@@ -149,10 +155,20 @@ impl<'a> BootInformation<'a> {
         Table::from_raw(&self.raw.memory_map)
     }
 
-    pub fn memory_regions(&self, table: &'a [u8]) -> impl Iterator<Item = MemoryRegion> + 'a {
+    /// The regions of the memory map, decoded from exactly the bytes the
+    /// table occupies at the start of `table`
+    pub fn memory_regions(
+        &self,
+        table: &'a [u8],
+    ) -> Result<impl Iterator<Item = MemoryRegion> + 'a, TableTooShort> {
+        let needed = self.memory_map().size();
+        let table = usize::try_from(needed)
+            .ok()
+            .and_then(|needed| table.get(..needed))
+            .ok_or(TableTooShort { needed })?;
         let entry_size = usize::try_from(self.raw.memory_map.entry_size)
             .expect("the entry size was checked by decode");
-        memory_map::regions(table, self.raw.memory_map.count, entry_size)
+        Ok(memory_map::regions(table, entry_size))
     }
 
     pub fn uefi_memory_map(&self) -> UefiMemoryMap {
@@ -663,7 +679,7 @@ mod tests {
         let mut bytes = entry(0x1000, 0x9000, 1, 32);
         bytes.extend(entry(0xa000, 0x6000, 7, 32));
         let information = decode(&raw).unwrap();
-        let regions: Vec<MemoryRegion> = information.memory_regions(&bytes).collect();
+        let regions: Vec<MemoryRegion> = information.memory_regions(&bytes).unwrap().collect();
         assert_eq!(
             regions,
             [
@@ -680,13 +696,27 @@ mod tests {
     }
 
     #[test]
-    fn memory_regions_stop_at_the_count() {
+    fn memory_regions_ignore_bytes_past_the_table() {
         let mut raw = valid();
         raw.memory_map = table(0x50_0200, 1, 24);
         let mut bytes = entry(0x1000, 0x9000, 1, 24);
         bytes.extend(entry(0xa000, 0x6000, 1, 24));
         let information = decode(&raw).unwrap();
-        assert_eq!(information.memory_regions(&bytes).count(), 1);
+        assert_eq!(information.memory_regions(&bytes).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn memory_regions_refuse_a_slice_shorter_than_the_table() {
+        let mut raw = valid();
+        raw.memory_map = table(0x50_0200, 2, 24);
+        let mut bytes = entry(0x1000, 0x9000, 1, 24);
+        bytes.extend(entry(0xa000, 0x6000, 1, 24));
+        bytes.pop();
+        let information = decode(&raw).unwrap();
+        assert_eq!(
+            information.memory_regions(&bytes).err(),
+            Some(TableTooShort { needed: 48 })
+        );
     }
 
     #[test]
@@ -696,7 +726,7 @@ mod tests {
         let mut bytes = entry(0x1000, 0, 1, 24);
         bytes.extend(entry(0xa000, 0x6000, 13, 24));
         let information = decode(&raw).unwrap();
-        let regions: Vec<MemoryRegion> = information.memory_regions(&bytes).collect();
+        let regions: Vec<MemoryRegion> = information.memory_regions(&bytes).unwrap().collect();
         assert_eq!(
             regions,
             [MemoryRegion {
