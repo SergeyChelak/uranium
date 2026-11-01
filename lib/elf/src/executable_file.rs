@@ -99,9 +99,15 @@ impl<'a> ExecutableFile<'a> {
         self.virtual_base
     }
 
-    /// The loadable segments that occupy memory, in file order
-    pub fn segments(&self) -> impl Iterator<Item = Segment<'a>> + use<'a> {
-        self.entries().filter(loads_memory)
+    /// The loadable segments that occupy memory, in file order, read from
+    /// the file again; an entry that fails to read is reported in its place,
+    /// as `ElfFile::segments` reports it
+    pub fn segments(&self) -> impl Iterator<Item = Result<Segment<'a>, ElfError>> + use<'a> {
+        self.file.segments().filter_map(|segment| {
+            segment
+                .map(|segment| loads_memory(&segment).then_some(segment))
+                .transpose()
+        })
     }
 
     /// The path of the program interpreter, as the file holds it with its
@@ -113,14 +119,6 @@ impl<'a> ExecutableFile<'a> {
     /// Whether the file carries a dynamic linking table
     pub fn is_dynamic(&self) -> bool {
         self.dynamic
-    }
-
-    /// Every entry of the program header table; `new` read each of them
-    /// once already, so none can fail now
-    fn entries(&self) -> impl Iterator<Item = Segment<'a>> + use<'a> {
-        self.file
-            .segments()
-            .map(|segment| segment.expect("every entry was read when the executable was made"))
     }
 }
 
@@ -186,13 +184,17 @@ mod tests {
         ExecutableFile::new(ElfFile::parse(bytes).unwrap(), Machine::X86_64, anywhere)
     }
 
+    fn loadable_segments<'a>(executable: &ExecutableFile<'a>) -> Vec<Segment<'a>> {
+        executable.segments().collect::<Result<_, _>>().unwrap()
+    }
+
     #[test]
     fn accepts_a_static_executable() {
         let bytes = kernel().build();
         let executable = executable(&bytes).unwrap();
         assert_eq!(executable.entry(), VirtualAddress::new(IMAGE_BASE + 0x10));
         assert_eq!(executable.virtual_base(), VirtualAddress::new(IMAGE_BASE));
-        let segments: Vec<Segment> = executable.segments().collect();
+        let segments = loadable_segments(&executable);
         assert_eq!(segments.len(), 3);
         assert_eq!(segments[1].bytes(), [0xaa; 8]);
         assert_eq!(segments[2].bytes(), [1, 2, 3]);
@@ -326,26 +328,32 @@ mod tests {
             .segment(SegmentKind::LOAD, IMAGE_BASE + 0x10, &[], 0, READ | WRITE)
             .build();
         let executable = executable(&bytes).unwrap();
-        assert_eq!(executable.segments().count(), 3);
+        assert_eq!(loadable_segments(&executable).len(), 3);
     }
 
     #[test]
     fn segments_borrow_the_bytes_not_the_executable() {
-        fn segments_of(bytes: &[u8]) -> impl Iterator<Item = Segment<'_>> {
+        fn segments_of(bytes: &[u8]) -> impl Iterator<Item = Result<Segment<'_>, ElfError>> {
             let executable = executable(bytes).unwrap();
             executable.segments()
         }
 
         let bytes = kernel().build();
-        assert_eq!(segments_of(&bytes).count(), 3);
+        assert_eq!(
+            segments_of(&bytes)
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+                .len(),
+            3
+        );
     }
 
     #[test]
     fn segments_are_read_again_from_the_bytes() {
         let bytes = kernel().build();
         let executable = executable(&bytes).unwrap();
-        let first: Vec<Segment> = executable.segments().collect();
-        let second: Vec<Segment> = executable.segments().collect();
+        let first: Vec<Result<Segment<'_>, ElfError>> = executable.segments().collect();
+        let second: Vec<Result<Segment<'_>, ElfError>> = executable.segments().collect();
         assert_eq!(first, second);
     }
 
@@ -364,6 +372,6 @@ mod tests {
         let executable = executable(&bytes).unwrap();
         assert_eq!(executable.interpreter(), Some(&b"/ld.so\0"[..]));
         assert!(executable.is_dynamic());
-        assert_eq!(executable.segments().count(), 3);
+        assert_eq!(loadable_segments(&executable).len(), 3);
     }
 }
