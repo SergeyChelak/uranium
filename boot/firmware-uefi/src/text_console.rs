@@ -1,6 +1,8 @@
 use firmware::{Console, ConsoleError};
 use uefi::SimpleTextOutputProtocol;
 
+use crate::error::firmware_status;
+
 pub struct TextConsole<'a> {
     protocol: &'a SimpleTextOutputProtocol,
 }
@@ -15,6 +17,6 @@ impl Console for TextConsole<'_> {
     fn write_str(&mut self, text: &str) -> Result<(), ConsoleError> {
         self.protocol
             .write_str(text)
-            .map_err(|_| ConsoleError::Device)
+            .map_err(|status| ConsoleError::Firmware(firmware_status(status)))
     }
 }

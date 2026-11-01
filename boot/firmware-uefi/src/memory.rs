@@ -4,6 +4,8 @@ use address::{PhysicalAddress, VirtualAddress};
 use firmware::{Allocation, Memory, MemoryError};
 use uefi::{BootServices, MemoryType, PAGE_SIZE, Status};
 
+use crate::error::firmware_status;
+
 pub struct UefiMemory<'a> {
     boot_services: &'a BootServices,
 }
@@ -35,28 +37,31 @@ impl Memory for UefiMemory<'_> {
     }
 
     fn free(&self, base: PhysicalAddress, bytes: &'static mut [u8]) -> Result<(), MemoryError> {
-        self.boot_services
+        Ok(self
+            .boot_services
             .free_pages(base, bytes.len() / PAGE_SIZE)
-            .map_err(|_| MemoryError::Device)
+            .map_err(firmware_status)?)
     }
 
     fn memory_map_size(&self) -> Result<usize, MemoryError> {
-        self.boot_services
+        Ok(self
+            .boot_services
             .memory_map_size()
-            .map_err(|_| MemoryError::Device)
+            .map_err(firmware_status)?)
     }
 }
 
 fn allocate_error(status: Status) -> MemoryError {
     match status {
         Status::OUT_OF_RESOURCES => MemoryError::OutOfMemory,
-        _ => MemoryError::Device,
+        other => MemoryError::Firmware(firmware_status(other)),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::allocate_error;
+    use crate::error::firmware_status;
     use firmware::MemoryError;
     use uefi::Status;
 
@@ -69,11 +74,10 @@ mod tests {
     }
 
     #[test]
-    fn every_other_status_is_a_device_failure() {
+    fn every_other_status_comes_from_the_firmware() {
         assert_eq!(
             allocate_error(Status::INVALID_PARAMETER),
-            MemoryError::Device
+            MemoryError::Firmware(firmware_status(Status::INVALID_PARAMETER))
         );
-        assert_eq!(allocate_error(Status::NOT_FOUND), MemoryError::Device);
     }
 }

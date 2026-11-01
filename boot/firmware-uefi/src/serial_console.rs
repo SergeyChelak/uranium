@@ -1,5 +1,7 @@
-use firmware::{Console, ConsoleError};
+use firmware::{Console, ConsoleError, FirmwareError};
 use uefi::{SerialIoProtocol, Status};
+
+use crate::error::firmware_status;
 
 const LINE_ENDING: &[u8] = b"\r\n";
 
@@ -42,17 +44,20 @@ fn with_line_endings(
     Ok(())
 }
 
-/// Repeats `write` until the device has taken every byte; no progress
-/// counts as a device failure, so a stuck port cannot hang the caller
+/// Repeats `write` until the device has taken every byte; no progress is
+/// an error, so a stuck port cannot hang the caller
 fn write_all(
     mut bytes: &[u8],
     mut write: impl FnMut(&[u8]) -> Result<usize, Status>,
 ) -> Result<(), ConsoleError> {
     while !bytes.is_empty() {
-        match write(bytes) {
-            Ok(0) | Err(_) => return Err(ConsoleError::Device),
-            Ok(written) => bytes = &bytes[written.min(bytes.len())..],
+        let written = write(bytes).map_err(firmware_status)?;
+        if written == 0 {
+            return Err(FirmwareError::NoProgress.into());
         }
+        bytes = bytes
+            .get(written..)
+            .ok_or(FirmwareError::CountBeyondBuffer)?;
     }
     Ok(())
 }
@@ -60,9 +65,12 @@ fn write_all(
 #[cfg(test)]
 mod tests {
     use super::{with_line_endings, write_all};
-    use firmware::ConsoleError;
+    use crate::error::firmware_status;
+    use firmware::{ConsoleError, FirmwareError};
     use std::vec::Vec;
     use uefi::Status;
+
+    const FAILURE: ConsoleError = ConsoleError::Firmware(FirmwareError::NoProgress);
 
     fn with_line_endings_of(text: &str) -> Vec<u8> {
         let mut output = Vec::new();
@@ -96,9 +104,9 @@ mod tests {
         let mut calls = 0;
         let result = with_line_endings("a\nb", |_| {
             calls += 1;
-            Err(ConsoleError::Device)
+            Err(FAILURE)
         });
-        assert_eq!(result, Err(ConsoleError::Device));
+        assert_eq!(result, Err(FAILURE));
         assert_eq!(calls, 1);
     }
 
@@ -115,15 +123,26 @@ mod tests {
     }
 
     #[test]
-    fn write_all_treats_no_progress_as_a_device_failure() {
-        assert_eq!(write_all(b"x", |_| Ok(0)), Err(ConsoleError::Device));
+    fn write_all_treats_no_progress_as_a_firmware_fault() {
+        assert_eq!(
+            write_all(b"x", |_| Ok(0)),
+            Err(ConsoleError::Firmware(FirmwareError::NoProgress))
+        );
     }
 
     #[test]
-    fn write_all_reports_a_firmware_error() {
+    fn write_all_reports_the_firmware_status() {
         assert_eq!(
             write_all(b"x", |_| Err(Status::TIMEOUT)),
-            Err(ConsoleError::Device)
+            Err(ConsoleError::Firmware(firmware_status(Status::TIMEOUT)))
+        );
+    }
+
+    #[test]
+    fn write_all_rejects_a_count_beyond_the_buffer() {
+        assert_eq!(
+            write_all(b"xy", |bytes| Ok(bytes.len() + 1)),
+            Err(ConsoleError::Firmware(FirmwareError::CountBeyondBuffer))
         );
     }
 }

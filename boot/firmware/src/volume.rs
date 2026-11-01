@@ -1,3 +1,5 @@
+use crate::FirmwareError;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileError {
     /// The volume has no file of that name
@@ -6,8 +8,16 @@ pub enum FileError {
     PathTooLong,
     /// The file ended before the buffer was full
     Short,
-    /// The volume or the device behind it reported a failure
-    Device,
+    /// The image was not started from a volume, so there is nothing to open
+    NoBootVolume,
+    /// The firmware failed the call
+    Firmware(FirmwareError),
+}
+
+impl From<FirmwareError> for FileError {
+    fn from(error: FirmwareError) -> Self {
+        Self::Firmware(error)
+    }
 }
 
 /// The volume the loader was started from, read-only
@@ -32,7 +42,9 @@ pub trait File {
             if read == 0 {
                 return Err(FileError::Short);
             }
-            buffer = buffer.get_mut(read..).ok_or(FileError::Device)?;
+            buffer = buffer
+                .get_mut(read..)
+                .ok_or(FileError::Firmware(FirmwareError::CountBeyondBuffer))?;
         }
         Ok(())
     }
@@ -41,6 +53,9 @@ pub trait File {
 #[cfg(test)]
 mod tests {
     use super::{File, FileError};
+    use crate::FirmwareError;
+
+    const FAILURE: FileError = FileError::Firmware(FirmwareError::NullPointer);
 
     /// A file whose firmware hands out at most `chunk` bytes per read
     struct ChunkedFile {
@@ -71,8 +86,26 @@ mod tests {
         }
 
         fn read(&mut self, _buffer: &mut [u8]) -> Result<usize, FileError> {
-            Err(FileError::Device)
+            Err(FAILURE)
         }
+    }
+
+    /// A file whose firmware claims one byte more than the buffer holds
+    struct OverclaimingFile;
+
+    impl File for OverclaimingFile {
+        fn size(&self) -> u64 {
+            0
+        }
+
+        fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError> {
+            Ok(buffer.len() + 1)
+        }
+    }
+
+    #[test]
+    fn a_firmware_fault_is_a_file_error() {
+        assert_eq!(FileError::from(FirmwareError::NullPointer), FAILURE);
     }
 
     #[test]
@@ -100,8 +133,17 @@ mod tests {
     }
 
     #[test]
-    fn read_exact_stops_at_a_device_error() {
+    fn read_exact_stops_at_a_firmware_error() {
         let mut buffer = [0; 4];
-        assert_eq!(FailingFile.read_exact(&mut buffer), Err(FileError::Device));
+        assert_eq!(FailingFile.read_exact(&mut buffer), Err(FAILURE));
+    }
+
+    #[test]
+    fn read_exact_rejects_a_count_beyond_the_buffer() {
+        let mut buffer = [0; 4];
+        assert_eq!(
+            OverclaimingFile.read_exact(&mut buffer),
+            Err(FileError::Firmware(FirmwareError::CountBeyondBuffer))
+        );
     }
 }

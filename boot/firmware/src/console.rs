@@ -1,9 +1,17 @@
+use crate::FirmwareError;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConsoleError {
     /// The firmware offers no such console on this machine
     Unavailable,
-    /// The console exists but the device reported a failure
-    Device,
+    /// The console exists but writing to it failed
+    Firmware(FirmwareError),
+}
+
+impl From<FirmwareError> for ConsoleError {
+    fn from(error: FirmwareError) -> Self {
+        Self::Firmware(error)
+    }
 }
 
 /// Text output the boot sequence can rely on without knowing the firmware
@@ -19,7 +27,10 @@ pub trait Console {
 #[cfg(test)]
 mod tests {
     use super::{Console, ConsoleError};
+    use crate::FirmwareError;
     use std::string::String;
+
+    const FAILURE: ConsoleError = ConsoleError::Firmware(FirmwareError::NoProgress);
 
     struct Recorder {
         written: String,
@@ -29,12 +40,17 @@ mod tests {
     impl Console for Recorder {
         fn write_str(&mut self, text: &str) -> Result<(), ConsoleError> {
             if self.fail_after == 0 {
-                return Err(ConsoleError::Device);
+                return Err(FAILURE);
             }
             self.fail_after -= 1;
             self.written.push_str(text);
             Ok(())
         }
+    }
+
+    #[test]
+    fn a_firmware_fault_is_a_console_error() {
+        assert_eq!(ConsoleError::from(FirmwareError::NoProgress), FAILURE);
     }
 
     #[test]
@@ -53,7 +69,7 @@ mod tests {
             written: String::new(),
             fail_after: 1,
         };
-        assert_eq!(console.write_line("uranium"), Err(ConsoleError::Device));
+        assert_eq!(console.write_line("uranium"), Err(FAILURE));
         assert_eq!(console.written, "uranium");
     }
 }

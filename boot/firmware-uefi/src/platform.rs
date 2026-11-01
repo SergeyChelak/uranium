@@ -6,6 +6,8 @@ use address::{PhysicalAddress, VirtualAddress};
 use firmware::{Platform, PlatformError};
 use uefi::{ACPI_20_TABLE_GUID, Handle, LoadedImageProtocol, SystemTable, ucs2};
 
+use crate::error::protocol_error;
+
 pub struct UefiPlatform<'a> {
     image: Handle,
     system_table: &'a SystemTable,
@@ -41,10 +43,10 @@ impl Platform for UefiPlatform<'_> {
             .system_table
             .boot_services()
             .handle_protocol::<LoadedImageProtocol>(self.image)
-            .map_err(|_| PlatformError::Unreadable)?;
+            .map_err(protocol_error)?;
         match image.load_options() {
             Some(options) => {
-                ucs2::decode_terminated(options, buffer).ok_or(PlatformError::Unreadable)
+                ucs2::decode_terminated(options, buffer).ok_or(PlatformError::LoadOptionsTooLong)
             }
             None => Ok(0),
         }

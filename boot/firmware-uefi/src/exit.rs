@@ -1,5 +1,7 @@
-use firmware::{ExitError, MemoryKind, MemoryMapSummary, MemoryRegion};
-use uefi::{BootServices, Handle, MemoryDescriptor, MemoryType, Status};
+use firmware::{ExitError, FirmwareError, MemoryKind, MemoryMapSummary, MemoryRegion};
+use uefi::{BootServices, Handle, MemoryDescriptor, MemoryMapError, MemoryType, Status};
+
+use crate::error::firmware_status;
 
 // Twice the two attempts of the FreeBSD and Linux loaders; a firmware that
 // keeps changing its map must not spin the loader forever
@@ -38,7 +40,7 @@ fn attempt(
 ) -> Result<Attempt, ExitError> {
     let map = boot_services
         .get_memory_map(raw)
-        .map_err(|_| ExitError::Device)?;
+        .map_err(memory_map_error)?;
     let region_count = convert_all(map.descriptors(), regions)?;
     let summary = MemoryMapSummary {
         region_count,
@@ -52,7 +54,15 @@ fn attempt(
     match unsafe { boot_services.exit_boot_services(image, map.key()) } {
         Ok(()) => Ok(Attempt::Exited(summary)),
         Err(Status::INVALID_PARAMETER) => Ok(Attempt::StaleKey),
-        Err(_) => Err(ExitError::Device),
+        Err(other) => Err(ExitError::Firmware(firmware_status(other))),
+    }
+}
+
+fn memory_map_error(error: MemoryMapError) -> ExitError {
+    match error {
+        MemoryMapError::Firmware(Status::BUFFER_TOO_SMALL) => ExitError::MapBufferTooSmall,
+        MemoryMapError::Firmware(other) => ExitError::Firmware(firmware_status(other)),
+        MemoryMapError::Malformed => ExitError::Firmware(FirmwareError::MalformedMemoryMap),
     }
 }
 
@@ -63,7 +73,7 @@ fn convert_all(
     let mut slots = regions.iter_mut();
     let mut count = 0;
     for descriptor in descriptors {
-        *slots.next().ok_or(ExitError::Device)? = convert(&descriptor);
+        *slots.next().ok_or(ExitError::RegionsBufferTooSmall)? = convert(&descriptor);
         count += 1;
     }
     Ok(count)
@@ -107,9 +117,10 @@ fn kind_of(memory_type: Result<MemoryType, u32>) -> MemoryKind {
 
 #[cfg(test)]
 mod tests {
-    use super::{Attempt, EXIT_ATTEMPTS, kind_of, with_retries};
-    use firmware::{ExitError, MemoryKind, MemoryMapSummary};
-    use uefi::MemoryType;
+    use super::{Attempt, EXIT_ATTEMPTS, kind_of, memory_map_error, with_retries};
+    use crate::error::firmware_status;
+    use firmware::{ExitError, FirmwareError, MemoryKind, MemoryMapSummary};
+    use uefi::{MemoryMapError, MemoryType, Status};
 
     const SUMMARY: MemoryMapSummary = MemoryMapSummary {
         region_count: 3,
@@ -182,13 +193,34 @@ mod tests {
     }
 
     #[test]
-    fn exit_stops_at_a_device_error() {
+    fn exit_stops_at_a_firmware_error() {
+        let failure = ExitError::Firmware(firmware_status(Status::DEVICE_ERROR));
         let mut calls = 0;
         let result = with_retries(|| {
             calls += 1;
-            Err(ExitError::Device)
+            Err(failure)
         });
-        assert_eq!(result, Err(ExitError::Device));
+        assert_eq!(result, Err(failure));
         assert_eq!(calls, 1);
+    }
+
+    #[test]
+    fn a_map_buffer_too_small_is_the_loaders_fault() {
+        assert_eq!(
+            memory_map_error(MemoryMapError::Firmware(Status::BUFFER_TOO_SMALL)),
+            ExitError::MapBufferTooSmall
+        );
+    }
+
+    #[test]
+    fn every_other_map_error_comes_from_the_firmware() {
+        assert_eq!(
+            memory_map_error(MemoryMapError::Firmware(Status::DEVICE_ERROR)),
+            ExitError::Firmware(firmware_status(Status::DEVICE_ERROR))
+        );
+        assert_eq!(
+            memory_map_error(MemoryMapError::Malformed),
+            ExitError::Firmware(FirmwareError::MalformedMemoryMap)
+        );
     }
 }

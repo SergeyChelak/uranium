@@ -1,5 +1,6 @@
 use crate::{
-    Console, ConsoleError, FileError, Memory, MemoryMapSummary, MemoryRegion, Platform, Volume,
+    Console, ConsoleError, FileError, FirmwareError, Memory, MemoryMapSummary, MemoryRegion,
+    Platform, Volume,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -7,8 +8,12 @@ pub enum ExitError {
     /// The memory map kept changing between reading it and leaving, and the
     /// loader gave up retrying
     MapChangedTooOften,
-    /// A buffer was too small or the firmware reported a failure
-    Device,
+    /// The buffer for the firmware's own map is smaller than the map
+    MapBufferTooSmall,
+    /// The map holds more regions than the buffer for the converted ones
+    RegionsBufferTooSmall,
+    /// The firmware failed the call
+    Firmware(FirmwareError),
 }
 
 /// Everything the boot sequence needs from the firmware. Its consoles and

@@ -2,12 +2,20 @@ use core::mem;
 
 use address::PhysicalAddress;
 
+use crate::FirmwareError;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryError {
     /// The firmware has no run of free pages that long
     OutOfMemory,
-    /// The firmware reported a failure
-    Device,
+    /// The firmware failed the call
+    Firmware(FirmwareError),
+}
+
+impl From<FirmwareError> for MemoryError {
+    fn from(error: FirmwareError) -> Self {
+        Self::Firmware(error)
+    }
 }
 
 /// Pages the firmware gave the loader: their physical base and a view of the
@@ -119,10 +127,14 @@ pub struct MemoryMapSummary {
 #[cfg(test)]
 mod tests {
     use super::{Allocation, Memory, MemoryError};
+    use crate::{FirmwareError, FirmwareStatus};
     use address::PhysicalAddress;
     use core::cell::Cell;
     use std::boxed::Box;
     use std::vec;
+
+    const REFUSAL: MemoryError =
+        MemoryError::Firmware(FirmwareError::Status(FirmwareStatus::new(7)));
 
     /// Counts the pages it has handed out and not yet taken back
     struct Ledger {
@@ -153,7 +165,7 @@ mod tests {
             _bytes: &'static mut [u8],
         ) -> Result<(), MemoryError> {
             if self.refuses {
-                return Err(MemoryError::Device);
+                return Err(REFUSAL);
             }
             self.outstanding.set(self.outstanding.get() - 1);
             Ok(())
@@ -162,6 +174,14 @@ mod tests {
         fn memory_map_size(&self) -> Result<usize, MemoryError> {
             Ok(0)
         }
+    }
+
+    #[test]
+    fn a_firmware_fault_is_a_memory_error() {
+        assert_eq!(
+            MemoryError::from(FirmwareError::Status(FirmwareStatus::new(7))),
+            REFUSAL
+        );
     }
 
     #[test]
@@ -200,7 +220,7 @@ mod tests {
             ..Ledger::new()
         };
         let allocation = ledger.allocate(1).unwrap();
-        assert_eq!(allocation.free(), Err(MemoryError::Device));
+        assert_eq!(allocation.free(), Err(REFUSAL));
     }
 
     #[test]
@@ -208,10 +228,10 @@ mod tests {
         fn fail_after_two(ledger: &Ledger) -> Result<(), MemoryError> {
             let _first = ledger.allocate(1)?;
             let _second = ledger.allocate(1)?;
-            Err(MemoryError::Device)
+            Err(REFUSAL)
         }
         let ledger = Ledger::new();
-        assert_eq!(fail_after_two(&ledger), Err(MemoryError::Device));
+        assert_eq!(fail_after_two(&ledger), Err(REFUSAL));
         assert_eq!(ledger.outstanding.get(), 0);
     }
 }

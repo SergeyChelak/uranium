@@ -6,7 +6,7 @@ use core::ptr::{self, NonNull};
 use crate::firmware_pointer::UnusedFunctionPointer;
 use crate::protocols::file_information::{FILE_INFORMATION_ID, FileInformationBuffer};
 use crate::ucs2::encode_terminated;
-use crate::{Guid, SimpleFileSystemProtocol, Status, UefiError};
+use crate::{Guid, OpenError, ProtocolError, SimpleFileSystemProtocol, Status};
 
 // UEFI 2.11, 13.5.2
 type OpenFunction = unsafe extern "efiapi" fn(
@@ -81,9 +81,9 @@ impl<'b> File<'b> {
 
     /// Opens `path` (UEFI form, `\` separators) for reading relative to this
     /// directory
-    pub fn open(&self, path: &str) -> Result<File<'b>, UefiError> {
+    pub fn open(&self, path: &str) -> Result<File<'b>, OpenError> {
         let mut buffer = [0; PATH_CAPACITY + 1];
-        let name = encode_terminated(path, &mut buffer).ok_or(UefiError::PathTooLong)?;
+        let name = encode_terminated(path, &mut buffer).ok_or(OpenError::PathTooLong)?;
         let mut opened: *const FileProtocol = ptr::null();
         // SAFETY: `name` is null-terminated, and `opened` outlives the call
         unsafe {
@@ -91,7 +91,7 @@ impl<'b> File<'b> {
         }
         .into_result()?;
         // SAFETY: the firmware opened `opened` for this caller, who now owns it
-        unsafe { File::from_raw(opened) }.ok_or(UefiError::NullPointer)
+        Ok(unsafe { File::from_raw(opened) }.ok_or(ProtocolError::NullPointer)?)
     }
 
     /// The file size from `EFI_FILE_INFO`
@@ -154,7 +154,7 @@ mod tests {
     };
     use crate::firmware_pointer::UnusedFunctionPointer;
     use crate::protocols::file_information::{FILE_INFORMATION_ID, FileInformation};
-    use crate::{Guid, Status, UefiError};
+    use crate::{Guid, OpenError, ProtocolError, Status};
     use core::ffi::c_void;
     use core::mem::size_of;
     use core::ptr;
@@ -327,7 +327,9 @@ mod tests {
         assert_eq!(file.protocol, root.protocol);
         assert_eq!(
             root.open("\\URANIUM\\OTHER.CFG").err(),
-            Some(UefiError::Firmware(Status::NOT_FOUND))
+            Some(OpenError::Protocol(ProtocolError::Firmware(
+                Status::NOT_FOUND
+            )))
         );
     }
 
@@ -337,7 +339,7 @@ mod tests {
         let root = file_over(&mut table);
         assert_eq!(
             root.open("\\URANIUM\\BOOT.CFG").err(),
-            Some(UefiError::NullPointer)
+            Some(OpenError::Protocol(ProtocolError::NullPointer))
         );
     }
 
@@ -353,10 +355,12 @@ mod tests {
         let longest = "x".repeat(PATH_CAPACITY);
         assert_eq!(
             root.open(&longest).err(),
-            Some(UefiError::Firmware(Status::DEVICE_ERROR))
+            Some(OpenError::Protocol(ProtocolError::Firmware(
+                Status::DEVICE_ERROR
+            )))
         );
         let too_long = "x".repeat(PATH_CAPACITY + 1);
-        assert_eq!(root.open(&too_long).err(), Some(UefiError::PathTooLong));
+        assert_eq!(root.open(&too_long).err(), Some(OpenError::PathTooLong));
     }
 
     #[test]

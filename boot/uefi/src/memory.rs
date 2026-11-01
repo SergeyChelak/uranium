@@ -3,7 +3,7 @@ use core::ptr;
 
 use address::PhysicalAddress;
 
-use crate::UefiError;
+use crate::MemoryMapError;
 
 // UEFI 2.11, 7.2.1, EFI_MEMORY_TYPE: the specification fixes only the order
 // of the variants; the values follow the C rules for an enum without initializers
@@ -121,11 +121,11 @@ impl<'a> MemoryMap<'a> {
         descriptor_size: usize,
         descriptor_version: u32,
         key: MemoryMapKey,
-    ) -> Result<Self, UefiError> {
+    ) -> Result<Self, MemoryMapError> {
         if descriptor_size < size_of::<MemoryDescriptor>()
             || !bytes.len().is_multiple_of(descriptor_size)
         {
-            return Err(UefiError::MalformedMemoryMap);
+            return Err(MemoryMapError::Malformed);
         }
         Ok(Self {
             bytes,
@@ -169,7 +169,7 @@ const _: () = assert!(size_of::<MemoryDescriptor>() == 40);
 #[cfg(test)]
 mod tests {
     use super::{MemoryDescriptor, MemoryMap, MemoryMapKey, MemoryType};
-    use crate::UefiError;
+    use crate::MemoryMapError;
     use address::PhysicalAddress;
     use core::mem::size_of;
     use std::vec;
@@ -250,7 +250,7 @@ mod tests {
         let narrow = size_of::<MemoryDescriptor>() - 8;
         assert_eq!(
             MemoryMap::new(&bytes, narrow, 1, MemoryMapKey(1)).err(),
-            Some(UefiError::MalformedMemoryMap)
+            Some(MemoryMapError::Malformed)
         );
     }
 
@@ -259,7 +259,7 @@ mod tests {
         let bytes = raw_map(&[descriptor(7, 0x1000, 2)]);
         assert_eq!(
             MemoryMap::new(&bytes[..STRIDE - 1], STRIDE, 1, MemoryMapKey(1)).err(),
-            Some(UefiError::MalformedMemoryMap)
+            Some(MemoryMapError::Malformed)
         );
     }
 }

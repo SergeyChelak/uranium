@@ -1,9 +1,10 @@
 use firmware::{ConsoleError, ExitError, FileError, Firmware, MemoryMapSummary, MemoryRegion};
 use uefi::{
-    Handle, LoadedImageProtocol, ResetKind, SerialIoProtocol, SimpleFileSystemProtocol, Status,
-    SystemTable, UefiError,
+    Handle, LoadedImageProtocol, ProtocolError, ResetKind, SerialIoProtocol,
+    SimpleFileSystemProtocol, Status, SystemTable,
 };
 
+use crate::error::protocol_error;
 use crate::{SerialConsole, TextConsole, UefiMemory, UefiPlatform, UefiVolume, exit};
 
 /// The firmware as the boot sequence sees it, reached through UEFI
@@ -62,8 +63,8 @@ impl<'a> Firmware for UefiFirmware<'a> {
             .locate_protocol::<SerialIoProtocol>()
         {
             Ok(protocol) => Ok(SerialConsole::new(protocol)),
-            Err(UefiError::Firmware(Status::NOT_FOUND)) => Err(ConsoleError::Unavailable),
-            Err(_) => Err(ConsoleError::Device),
+            Err(ProtocolError::Firmware(Status::NOT_FOUND)) => Err(ConsoleError::Unavailable),
+            Err(other) => Err(ConsoleError::Firmware(protocol_error(other))),
         }
     }
 
@@ -71,12 +72,12 @@ impl<'a> Firmware for UefiFirmware<'a> {
         let boot_services = self.system_table.boot_services();
         let image = boot_services
             .handle_protocol::<LoadedImageProtocol>(self.image)
-            .map_err(|_| FileError::Device)?;
-        let device = image.device_handle().ok_or(FileError::Device)?;
+            .map_err(protocol_error)?;
+        let device = image.device_handle().ok_or(FileError::NoBootVolume)?;
         let file_system = boot_services
             .handle_protocol::<SimpleFileSystemProtocol>(device)
-            .map_err(|_| FileError::Device)?;
-        let root = file_system.open_volume().map_err(|_| FileError::Device)?;
+            .map_err(protocol_error)?;
+        let root = file_system.open_volume().map_err(protocol_error)?;
         Ok(UefiVolume::new(root))
     }
 

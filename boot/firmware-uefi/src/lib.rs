@@ -7,6 +7,7 @@
 #[cfg(test)]
 extern crate std;
 
+mod error;
 mod exit;
 mod memory;
 mod platform;

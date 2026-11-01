@@ -1,5 +1,7 @@
 use firmware::{FileError, Volume};
-use uefi::{Status, UefiError};
+use uefi::{OpenError, ProtocolError, Status};
+
+use crate::error::{firmware_status, protocol_error};
 
 pub struct UefiVolume<'b> {
     root: uefi::File<'b>,
@@ -16,7 +18,7 @@ impl<'b> Volume for UefiVolume<'b> {
 
     fn open(&self, path: &str) -> Result<UefiFile<'b>, FileError> {
         let file = self.root.open(path).map_err(open_error)?;
-        let size = file.size().map_err(|_| FileError::Device)?;
+        let size = file.size().map_err(firmware_status)?;
         Ok(UefiFile { file, size })
     }
 }
@@ -32,47 +34,51 @@ impl firmware::File for UefiFile<'_> {
     }
 
     fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError> {
-        self.file.read(buffer).map_err(|_| FileError::Device)
+        Ok(self.file.read(buffer).map_err(firmware_status)?)
     }
 }
 
-fn open_error(error: UefiError) -> FileError {
+fn open_error(error: OpenError) -> FileError {
     match error {
-        UefiError::Firmware(Status::NOT_FOUND) => FileError::NotFound,
-        UefiError::PathTooLong => FileError::PathTooLong,
-        _ => FileError::Device,
+        OpenError::Protocol(ProtocolError::Firmware(Status::NOT_FOUND)) => FileError::NotFound,
+        OpenError::PathTooLong => FileError::PathTooLong,
+        OpenError::Protocol(other) => FileError::Firmware(protocol_error(other)),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::open_error;
-    use firmware::FileError;
-    use uefi::{Status, UefiError};
+    use crate::error::firmware_status;
+    use firmware::{FileError, FirmwareError};
+    use uefi::{OpenError, ProtocolError, Status};
 
     #[test]
     fn not_found_means_the_file_is_missing() {
         assert_eq!(
-            open_error(UefiError::Firmware(Status::NOT_FOUND)),
+            open_error(OpenError::Protocol(ProtocolError::Firmware(
+                Status::NOT_FOUND
+            ))),
             FileError::NotFound
         );
     }
 
     #[test]
     fn a_rejected_path_is_too_long() {
-        assert_eq!(open_error(UefiError::PathTooLong), FileError::PathTooLong);
+        assert_eq!(open_error(OpenError::PathTooLong), FileError::PathTooLong);
     }
 
     #[test]
-    fn every_other_error_is_a_device_failure() {
+    fn every_other_error_comes_from_the_firmware() {
         assert_eq!(
-            open_error(UefiError::Firmware(Status::DEVICE_ERROR)),
-            FileError::Device
+            open_error(OpenError::Protocol(ProtocolError::Firmware(
+                Status::DEVICE_ERROR
+            ))),
+            FileError::Firmware(firmware_status(Status::DEVICE_ERROR))
         );
         assert_eq!(
-            open_error(UefiError::Firmware(Status::UNSUPPORTED)),
-            FileError::Device
+            open_error(OpenError::Protocol(ProtocolError::NullPointer)),
+            FileError::Firmware(FirmwareError::NullPointer)
         );
-        assert_eq!(open_error(UefiError::NullPointer), FileError::Device);
     }
 }
