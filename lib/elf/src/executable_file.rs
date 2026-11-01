@@ -78,7 +78,7 @@ impl<'a> ExecutableFile<'a> {
     /// The lowest address any segment occupies
     pub fn virtual_base(&self) -> VirtualAddress {
         self.segments()
-            .map(|segment| segment.virtual_address)
+            .map(|segment| segment.virtual_address())
             .min()
             .expect("an executable has a segment: the one holding its entry")
     }
@@ -98,14 +98,14 @@ impl<'a> ExecutableFile<'a> {
     /// terminating zero, when the file asks for one
     pub fn interpreter(&self) -> Option<&'a [u8]> {
         self.entries()
-            .find(|segment| segment.kind == SegmentKind::INTERPRETER)
+            .find(|segment| segment.kind() == SegmentKind::INTERPRETER)
             .map(|segment| self.file.segment_bytes(&segment))
     }
 
     /// Whether the file carries a dynamic linking table
     pub fn is_dynamic(&self) -> bool {
         self.entries()
-            .any(|segment| segment.kind == SegmentKind::DYNAMIC)
+            .any(|segment| segment.kind() == SegmentKind::DYNAMIC)
     }
 
     /// Every entry of the program header table; `new` read each of them
@@ -119,7 +119,7 @@ impl<'a> ExecutableFile<'a> {
 
 /// Whether an entry is a loadable segment with memory to load into
 fn loads_memory(segment: &Segment) -> bool {
-    segment.kind == SegmentKind::LOAD && segment.memory_size != 0
+    segment.kind() == SegmentKind::LOAD && segment.memory_size() != 0
 }
 
 /// Whether `segment`, the entry at `index`, shares memory with a loadable
@@ -132,8 +132,8 @@ fn overlaps_an_earlier_segment(
     for earlier in file.segments().take(index) {
         let earlier = earlier?;
         if loads_memory(&earlier)
-            && earlier.virtual_address < segment.end()
-            && segment.virtual_address < earlier.end()
+            && earlier.virtual_address() < segment.end()
+            && segment.virtual_address() < earlier.end()
         {
             return Ok(true);
         }
@@ -189,8 +189,8 @@ mod tests {
         assert_eq!(segments.len(), 3);
         assert_eq!(executable.segment_bytes(&segments[1]), [0xaa; 8]);
         assert_eq!(executable.segment_bytes(&segments[2]), [1, 2, 3]);
-        assert_eq!(segments[2].memory_size, 0x100);
-        assert!(segments[2].writable && !segments[2].executable);
+        assert_eq!(segments[2].memory_size(), 0x100);
+        assert!(segments[2].is_writable() && !segments[2].is_executable());
         assert_eq!(executable.interpreter(), None);
         assert!(!executable.is_dynamic());
     }
@@ -233,8 +233,8 @@ mod tests {
             .segment(SegmentKind::LOAD, 0x40_0000, &[0; 4], 4, READ)
             .build();
         let above_the_image = |segment: &Segment| {
-            if segment.virtual_address < VirtualAddress::new(IMAGE_BASE) {
-                Err(BelowTheImage(segment.virtual_address))
+            if segment.virtual_address() < VirtualAddress::new(IMAGE_BASE) {
+                Err(BelowTheImage(segment.virtual_address()))
             } else {
                 Ok(())
             }

@@ -53,7 +53,7 @@ impl<'a> ElfFile<'a> {
     /// beyond them is zero
     pub fn segment_bytes(&self, segment: &Segment) -> &'a [u8] {
         Fields::new(self.bytes)
-            .window(segment.offset, segment.file_size)
+            .window(segment.offset(), segment.file_size())
             .expect("a segment of this file lies within it")
             .bytes()
     }

@@ -108,15 +108,15 @@ impl SegmentKind {
 /// loadable segment the bytes beyond the file's are zero
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Segment {
-    pub kind: SegmentKind,
-    pub virtual_address: VirtualAddress,
-    pub offset: u64,
-    pub file_size: u64,
-    pub memory_size: u64,
-    pub alignment: u64,
-    pub readable: bool,
-    pub writable: bool,
-    pub executable: bool,
+    kind: SegmentKind,
+    virtual_address: VirtualAddress,
+    offset: u64,
+    file_size: u64,
+    memory_size: u64,
+    alignment: u64,
+    readable: bool,
+    writable: bool,
+    executable: bool,
 }
 
 impl Segment {
@@ -143,6 +143,42 @@ impl Segment {
             writable: raw.flags & WRITE != 0,
             executable: raw.flags & EXECUTE != 0,
         })
+    }
+
+    pub fn kind(&self) -> SegmentKind {
+        self.kind
+    }
+
+    pub fn virtual_address(&self) -> VirtualAddress {
+        self.virtual_address
+    }
+
+    pub fn offset(&self) -> u64 {
+        self.offset
+    }
+
+    pub fn file_size(&self) -> u64 {
+        self.file_size
+    }
+
+    pub fn memory_size(&self) -> u64 {
+        self.memory_size
+    }
+
+    pub fn alignment(&self) -> u64 {
+        self.alignment
+    }
+
+    pub fn is_readable(&self) -> bool {
+        self.readable
+    }
+
+    pub fn is_writable(&self) -> bool {
+        self.writable
+    }
+
+    pub fn is_executable(&self) -> bool {
+        self.executable
     }
 
     /// The address just past the segment's memory
@@ -215,8 +251,8 @@ mod tests {
             alignment: 16,
         });
         let segment = segments(&stack.build()).remove(0).unwrap();
-        assert_eq!(segment.kind.code(), 0x6474_e551);
-        assert_eq!(segment.alignment, 16);
+        assert_eq!(segment.kind().code(), 0x6474_e551);
+        assert_eq!(segment.alignment(), 16);
     }
 
     #[test]
@@ -231,8 +267,8 @@ mod tests {
             )
             .build();
         let segment = segments(&bytes).remove(0).unwrap();
-        assert!(segment.readable && segment.writable && !segment.executable);
-        assert_eq!((segment.file_size, segment.memory_size), (4, 16));
+        assert!(segment.is_readable() && segment.is_writable() && !segment.is_executable());
+        assert_eq!((segment.file_size(), segment.memory_size()), (4, 16));
     }
 
     #[test]
@@ -244,7 +280,7 @@ mod tests {
             .build();
         let offsets: Vec<u64> = segments(&bytes)
             .into_iter()
-            .map(|segment| segment.unwrap().offset)
+            .map(|segment| segment.unwrap().offset())
             .collect();
         assert_eq!(offsets, [192, 194]);
     }
