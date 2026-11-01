@@ -33,6 +33,9 @@ type ExitBootServicesFunction = unsafe extern "efiapi" fn(Handle, usize) -> Stat
 // UEFI 2.11, 7.5.2
 type StallFunction = unsafe extern "efiapi" fn(usize) -> Status;
 
+// UEFI 2.11, 4.4.1
+const SIGNATURE: u64 = 0x5652_4553_544f_4f42;
+
 // UEFI 2.11, 4.4.1; declared up to LocateProtocol, the last field the loader calls
 #[repr(C)]
 pub struct BootServices {
@@ -78,6 +81,10 @@ pub struct BootServices {
 }
 
 impl BootServices {
+    pub(crate) fn has_valid_signature(&self) -> bool {
+        self.header.has_signature(SIGNATURE)
+    }
+
     /// Allocates `count` pages of `memory_type` wherever the firmware chooses
     pub fn allocate_pages(
         &self,
@@ -210,6 +217,20 @@ const _: () = assert!(offset_of!(BootServices, handle_protocol) == 152);
 const _: () = assert!(offset_of!(BootServices, exit_boot_services) == 232);
 const _: () = assert!(offset_of!(BootServices, stall) == 248);
 const _: () = assert!(offset_of!(BootServices, locate_protocol) == 320);
+
+#[cfg(test)]
+pub(crate) mod testing {
+    use super::BootServices;
+    use super::tests::{Fakes, table_with};
+    use crate::TableHeader;
+
+    /// A table that refuses every call, under the given header
+    pub(crate) fn table_with_header(header: TableHeader) -> BootServices {
+        let mut table = table_with(Fakes::refusing());
+        table.header = header;
+        table
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -376,7 +397,7 @@ mod tests {
         Status::SUCCESS
     }
 
-    struct Fakes {
+    pub(super) struct Fakes {
         handle_protocol: HandleProtocolFunction,
         locate_protocol: LocateProtocolFunction,
         allocate_pages: AllocatePagesFunction,
@@ -388,7 +409,7 @@ mod tests {
 
     impl Fakes {
         /// Fakes that refuse every call; a test overrides the one it exercises
-        fn refusing() -> Self {
+        pub(super) fn refusing() -> Self {
             Self {
                 handle_protocol: support_nothing,
                 locate_protocol: find_nothing,
@@ -401,7 +422,7 @@ mod tests {
         }
     }
 
-    fn table_with(fakes: Fakes) -> BootServices {
+    pub(super) fn table_with(fakes: Fakes) -> BootServices {
         let mut table = MaybeUninit::<BootServices>::zeroed();
         let place = table.as_mut_ptr();
         // SAFETY: `place` comes from `MaybeUninit`, so the field exists

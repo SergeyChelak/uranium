@@ -33,5 +33,6 @@ pub use protocols::{
 };
 pub use runtime_services::{ResetKind, RuntimeServices};
 pub use status::Status;
-pub use system_table::SystemTable;
-pub use table_header::TableHeader;
+pub use system_table::{SystemTable, UnexpectedSignature};
+
+pub(crate) use table_header::TableHeader;

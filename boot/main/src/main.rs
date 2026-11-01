@@ -28,7 +28,8 @@ pub unsafe extern "efiapi" fn efi_main(
     // SAFETY: the caller guarantees the system table pointer is valid while
     // boot services run, and this entry point ends with a firmware reset,
     // never with ExitBootServices
-    let system_table = unsafe { &*system_table };
+    let system_table = unsafe { SystemTable::from_raw(system_table) }
+        .unwrap_or_else(|unexpected| panic!("firmware tables are not usable: {unexpected:?}"));
     let firmware = UefiFirmware::new(image_handle, system_table);
     greet(&firmware);
     firmware.shutdown()

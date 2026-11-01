@@ -38,3 +38,11 @@ impl UnusedFunctionPointer {
         Self(core::ptr::null())
     }
 }
+
+#[cfg(test)]
+impl<T> FirmwarePointer<T> {
+    /// A slot of a fake table pointing at `pointee`
+    pub(crate) fn to(pointee: &T) -> Self {
+        Self(pointee)
+    }
+}

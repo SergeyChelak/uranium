@@ -20,6 +20,9 @@ pub enum ResetKind {
     PlatformSpecific = 3,
 }
 
+// UEFI 2.11, 4.5.1
+const SIGNATURE: u64 = 0x5652_4553_544e_5552;
+
 // UEFI 2.11, 4.5.1; declared up to ResetSystem, the last field the loader calls
 #[repr(C)]
 pub struct RuntimeServices {
@@ -38,6 +41,10 @@ pub struct RuntimeServices {
 }
 
 impl RuntimeServices {
+    pub(crate) fn has_valid_signature(&self) -> bool {
+        self.header.has_signature(SIGNATURE)
+    }
+
     /// Resets or shuts down the platform. The firmware does not return; if
     /// it does anyway, the processor is parked here instead of running on
     pub fn reset_system(&self, kind: ResetKind, status: Status) -> ! {
@@ -52,6 +59,40 @@ impl RuntimeServices {
 }
 
 const _: () = assert!(offset_of!(RuntimeServices, reset_system) == 104);
+
+#[cfg(test)]
+pub(crate) mod testing {
+    use super::{ResetKind, RuntimeServices};
+    use crate::{Status, TableHeader};
+    use core::ffi::c_void;
+    use core::mem::MaybeUninit;
+
+    unsafe extern "efiapi" fn never_reset(
+        _kind: ResetKind,
+        _status: Status,
+        _size: usize,
+        _data: *const c_void,
+    ) {
+    }
+
+    /// A table nothing may be called through, under the given header
+    pub(crate) fn table_with_header(header: TableHeader) -> RuntimeServices {
+        let mut table = MaybeUninit::<RuntimeServices>::zeroed();
+        let place = table.as_mut_ptr();
+        // SAFETY: `place` comes from `MaybeUninit`, so the field exists
+        let slot = unsafe { &raw mut (*place).header };
+        // SAFETY: `slot` points inside `table`
+        unsafe { slot.write(header) };
+        // SAFETY: `place` comes from `MaybeUninit`, so the field exists
+        let slot = unsafe { &raw mut (*place).reset_system };
+        // SAFETY: `slot` points inside `table`
+        unsafe { slot.write(never_reset) };
+        // SAFETY: every other field is a nullable raw pointer, for which
+        // all-zero bytes are valid; the header and the function pointer were
+        // written above
+        unsafe { table.assume_init() }
+    }
+}
 
 #[cfg(test)]
 mod tests {
