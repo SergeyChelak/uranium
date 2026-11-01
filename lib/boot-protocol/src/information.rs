@@ -7,7 +7,9 @@ use crate::framebuffer::RawFramebuffer;
 use crate::memory_map::{self, RawMemoryRegion};
 use crate::ranges::{RawRange, RawTable};
 use crate::serial_console::RawSerialConsole;
-use crate::{Framebuffer, MemoryRegion, PhysicalRange, SerialConsole, Table, UefiMemoryMap};
+use crate::{
+    EntryTooShort, Framebuffer, MemoryRegion, PhysicalRange, SerialConsole, Table, UefiMemoryMap,
+};
 
 structure! {
     /// What the loader writes into memory and the kernel finds through the
@@ -80,6 +82,7 @@ pub enum BootInformationError {
     PhysicalMapBase,
     EmptyRange(&'static str),
     MemoryMapEntrySize,
+    TableTooLarge(&'static str),
 }
 
 /// The caller gave `memory_regions` fewer bytes than the table occupies
@@ -88,9 +91,16 @@ pub struct TableTooShort {
     pub needed: u64,
 }
 
-/// The loader's hand-off, checked once by `decode` and read in place
+/// The loader's hand-off, checked once by `decode`: what the check produced
+/// is kept as typed values, the rest is read in place
 pub struct BootInformation<'a> {
     raw: &'a RawBootInformation,
+    kernel_image: PhysicalRange,
+    kernel_stack: PhysicalRange,
+    page_tables: PhysicalRange,
+    loader_data: PhysicalRange,
+    memory_map: Table,
+    uefi_memory_map: Table,
 }
 
 impl<'a> BootInformation<'a> {
@@ -109,20 +119,26 @@ impl<'a> BootInformation<'a> {
         if raw.physical_map_base != L::PHYSICAL_MAP_BASE {
             return Err(BootInformationError::PhysicalMapBase);
         }
-        let required = [
-            ("kernel_image", &raw.kernel_image),
-            ("kernel_stack", &raw.kernel_stack),
-            ("page_tables", &raw.page_tables),
-            ("loader_data", &raw.loader_data),
-        ];
-        if let Some((name, _)) = required.into_iter().find(|(_, range)| range.size == 0) {
-            return Err(BootInformationError::EmptyRange(name));
-        }
-        let entry_size = raw.memory_map.entry_size;
-        if entry_size < RawMemoryRegion::SIZE || usize::try_from(entry_size).is_err() {
+        let kernel_image = required(&raw.kernel_image, "kernel_image")?;
+        let kernel_stack = required(&raw.kernel_stack, "kernel_stack")?;
+        let page_tables = required(&raw.page_tables, "page_tables")?;
+        let loader_data = required(&raw.loader_data, "loader_data")?;
+        if raw.memory_map.entry_size != RawMemoryRegion::SIZE {
             return Err(BootInformationError::MemoryMapEntrySize);
         }
-        Ok(Self { raw })
+        let memory_map = Table::from_raw(&raw.memory_map)
+            .ok_or(BootInformationError::TableTooLarge("memory_map"))?;
+        let uefi_memory_map = Table::from_raw(&raw.uefi_memory_map)
+            .ok_or(BootInformationError::TableTooLarge("uefi_memory_map"))?;
+        Ok(Self {
+            raw,
+            kernel_image,
+            kernel_stack,
+            page_tables,
+            loader_data,
+            memory_map,
+            uefi_memory_map,
+        })
     }
 
     pub fn physical_map_base(&self) -> VirtualAddress {
@@ -130,7 +146,7 @@ impl<'a> BootInformation<'a> {
     }
 
     pub fn kernel_image(&self) -> PhysicalRange {
-        required(&self.raw.kernel_image)
+        self.kernel_image
     }
 
     pub fn kernel_virtual_base(&self) -> VirtualAddress {
@@ -138,42 +154,41 @@ impl<'a> BootInformation<'a> {
     }
 
     pub fn kernel_stack(&self) -> PhysicalRange {
-        required(&self.raw.kernel_stack)
+        self.kernel_stack
     }
 
     pub fn page_tables(&self) -> PhysicalRange {
-        required(&self.raw.page_tables)
+        self.page_tables
     }
 
     pub fn loader_data(&self) -> PhysicalRange {
-        required(&self.raw.loader_data)
+        self.loader_data
     }
 
     /// Where the memory map lies; read its bytes and pass them to
     /// `memory_regions`
     pub fn memory_map(&self) -> Table {
-        Table::from_raw(&self.raw.memory_map)
+        self.memory_map
     }
 
     /// The regions of the memory map, decoded from exactly the bytes the
-    /// table occupies at the start of `table`
+    /// table occupies at the start of `table`; an entry shorter than its
+    /// structure is reported in its place
     pub fn memory_regions(
         &self,
         table: &'a [u8],
-    ) -> Result<impl Iterator<Item = MemoryRegion> + 'a, TableTooShort> {
-        let needed = self.memory_map().size();
+    ) -> Result<impl Iterator<Item = Result<MemoryRegion, EntryTooShort>> + 'a, TableTooShort> {
+        let needed = self.memory_map.size();
         let table = usize::try_from(needed)
             .ok()
             .and_then(|needed| table.get(..needed))
             .ok_or(TableTooShort { needed })?;
-        let entry_size = usize::try_from(self.raw.memory_map.entry_size)
-            .expect("the entry size was checked by decode");
-        Ok(memory_map::regions(table, entry_size))
+        Ok(memory_map::regions(table))
     }
 
     pub fn uefi_memory_map(&self) -> UefiMemoryMap {
         UefiMemoryMap {
-            table: Table::from_raw(&self.raw.uefi_memory_map),
+            table: self.uefi_memory_map,
             descriptor_version: self.raw.uefi_descriptor_version,
         }
     }
@@ -211,8 +226,8 @@ impl<'a> BootInformation<'a> {
     }
 }
 
-fn required(range: &RawRange) -> PhysicalRange {
-    PhysicalRange::from_raw(range).expect("the required ranges were checked by decode")
+fn required(range: &RawRange, name: &'static str) -> Result<PhysicalRange, BootInformationError> {
+    PhysicalRange::from_raw(range).ok_or(BootInformationError::EmptyRange(name))
 }
 
 #[cfg(test)]
@@ -527,12 +542,30 @@ mod tests {
     }
 
     #[test]
-    fn decode_rejects_a_short_memory_map_entry() {
+    fn decode_rejects_any_other_memory_map_entry_size() {
         let mut raw = valid();
-        raw.memory_map = table(0x50_0200, 3, 16);
+        for entry_size in [16, 32] {
+            raw.memory_map = table(0x50_0200, 3, entry_size);
+            assert_eq!(
+                decode(&raw).err(),
+                Some(BootInformationError::MemoryMapEntrySize)
+            );
+        }
+    }
+
+    #[test]
+    fn decode_rejects_a_table_whose_bytes_do_not_fit_in_u64() {
+        let mut raw = valid();
+        raw.memory_map = table(0x50_0200, u64::MAX, 24);
         assert_eq!(
             decode(&raw).err(),
-            Some(BootInformationError::MemoryMapEntrySize)
+            Some(BootInformationError::TableTooLarge("memory_map"))
+        );
+        raw.memory_map = table(0x50_0200, 3, 24);
+        raw.uefi_memory_map = table(0x50_1000, u64::MAX, 48);
+        assert_eq!(
+            decode(&raw).err(),
+            Some(BootInformationError::TableTooLarge("uefi_memory_map"))
         );
     }
 
@@ -554,21 +587,13 @@ mod tests {
         assert_eq!(information.loader_data(), physical(0x50_0000, 0x1000));
         assert_eq!(
             information.memory_map(),
-            Table {
-                base: PhysicalAddress::new(0x50_0200),
-                count: 3,
-                entry_size: 24,
-            }
+            Table::new(PhysicalAddress::new(0x50_0200), 3, 24).unwrap()
         );
         assert_eq!(information.memory_map().size(), 72);
         assert_eq!(
             information.uefi_memory_map(),
             UefiMemoryMap {
-                table: Table {
-                    base: PhysicalAddress::new(0x50_1000),
-                    count: 10,
-                    entry_size: 48,
-                },
+                table: Table::new(PhysicalAddress::new(0x50_1000), 10, 48).unwrap(),
                 descriptor_version: 1,
             }
         );
@@ -673,13 +698,17 @@ mod tests {
     }
 
     #[test]
-    fn memory_regions_step_by_entry_size() {
+    fn memory_regions_decode_each_entry() {
         let mut raw = valid();
-        raw.memory_map = table(0x50_0200, 2, 32);
-        let mut bytes = entry(0x1000, 0x9000, 1, 32);
-        bytes.extend(entry(0xa000, 0x6000, 7, 32));
+        raw.memory_map = table(0x50_0200, 2, 24);
+        let mut bytes = entry(0x1000, 0x9000, 1, 24);
+        bytes.extend(entry(0xa000, 0x6000, 7, 24));
         let information = decode(&raw).unwrap();
-        let regions: Vec<MemoryRegion> = information.memory_regions(&bytes).unwrap().collect();
+        let regions: Vec<MemoryRegion> = information
+            .memory_regions(&bytes)
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
         assert_eq!(
             regions,
             [
@@ -726,7 +755,11 @@ mod tests {
         let mut bytes = entry(0x1000, 0, 1, 24);
         bytes.extend(entry(0xa000, 0x6000, 13, 24));
         let information = decode(&raw).unwrap();
-        let regions: Vec<MemoryRegion> = information.memory_regions(&bytes).unwrap().collect();
+        let regions: Vec<MemoryRegion> = information
+            .memory_regions(&bytes)
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
         assert_eq!(
             regions,
             [MemoryRegion {

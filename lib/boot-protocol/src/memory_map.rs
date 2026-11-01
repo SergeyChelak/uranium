@@ -1,5 +1,5 @@
 use address::PhysicalAddress;
-use byte_fields::{Decode, Decoder, layout, structure};
+use byte_fields::{Decode, Decoder, OutOfBounds, layout, structure};
 
 use crate::{PhysicalRange, Table};
 
@@ -84,25 +84,32 @@ pub struct MemoryRegion {
     pub kind: MemoryKind,
 }
 
+/// An entry of the memory map held fewer bytes than `RawMemoryRegion`
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EntryTooShort;
+
 impl MemoryRegion {
-    /// `None` for an entry without memory behind it
-    fn decode(entry: &[u8]) -> Option<Self> {
+    /// `Ok(None)` for an entry without memory behind it
+    fn decode(entry: &[u8]) -> Result<Option<Self>, EntryTooShort> {
         let raw = RawMemoryRegion::decode(&mut Decoder::new(entry))
-            .expect("the entry size was checked by BootInformation::decode");
-        let range = PhysicalRange::new(raw.base, raw.size)?;
-        Some(Self {
+            .map_err(|OutOfBounds| EntryTooShort)?;
+        Ok(PhysicalRange::new(raw.base, raw.size).map(|range| Self {
             range,
             kind: MemoryKind::from(raw.kind),
-        })
+        }))
     }
 }
 
-/// The regions of a table given exactly its bytes, stepping by the entry
-/// size the table names rather than by the size of `RawMemoryRegion`
-pub(crate) fn regions(table: &[u8], entry_size: usize) -> impl Iterator<Item = MemoryRegion> + '_ {
-    table
-        .chunks_exact(entry_size)
-        .filter_map(MemoryRegion::decode)
+/// The regions of a table given exactly its bytes, one `RawMemoryRegion`
+/// after another; entries without memory are skipped, an entry too short is
+/// reported in its place
+pub(crate) fn regions(
+    table: &[u8],
+) -> impl Iterator<Item = Result<MemoryRegion, EntryTooShort>> + '_ {
+    let (entries, _) = table.as_chunks::<{ RawMemoryRegion::SIZE as usize }>();
+    entries
+        .iter()
+        .filter_map(|entry| MemoryRegion::decode(entry).transpose())
 }
 
 /// The memory map as the firmware gave it, kept for the kernel to hand back
@@ -150,5 +157,11 @@ mod tests {
         for code in [0, 13, u32::MAX] {
             assert_eq!(MemoryKind::from(code), MemoryKind::Reserved);
         }
+    }
+
+    #[test]
+    fn an_entry_shorter_than_the_structure_is_reported() {
+        assert_eq!(MemoryRegion::decode(&[0u8; 16]), Err(EntryTooShort));
+        assert_eq!(MemoryRegion::decode(&[0u8; 24]), Ok(None));
     }
 }

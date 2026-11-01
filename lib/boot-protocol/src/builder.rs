@@ -244,11 +244,7 @@ mod tests {
 
     fn uefi_memory_map() -> UefiMemoryMap {
         UefiMemoryMap {
-            table: Table {
-                base: PhysicalAddress::new(0x5000_1000),
-                count: 40,
-                entry_size: 48,
-            },
+            table: Table::new(PhysicalAddress::new(0x5000_1000), 40, 48).unwrap(),
             descriptor_version: 1,
         }
     }
@@ -312,10 +308,14 @@ mod tests {
         assert_eq!(information.initial_ramdisk(), None);
 
         let table = information.memory_map();
-        assert_eq!(table.base, BLOCK_BASE + 264);
-        assert_eq!(table.count, 2);
+        assert_eq!(table.base(), BLOCK_BASE + 264);
+        assert_eq!(table.count(), 2);
         let table_bytes = &block[264..264 + table.size() as usize];
-        let decoded: Vec<MemoryRegion> = information.memory_regions(table_bytes).unwrap().collect();
+        let decoded: Vec<MemoryRegion> = information
+            .memory_regions(table_bytes)
+            .unwrap()
+            .map(Result::unwrap)
+            .collect();
         assert_eq!(decoded, regions);
 
         let command_line = information.command_line().unwrap();

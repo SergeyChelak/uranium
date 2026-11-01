@@ -65,25 +65,63 @@ impl PhysicalRange {
     }
 }
 
-/// Where a table of fixed-size entries lies in physical memory
+/// Where a table of fixed-size entries lies in physical memory; the bytes
+/// the entries occupy always fit in `u64`, so nobody checks
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Table {
-    pub base: PhysicalAddress,
-    pub count: u64,
-    pub entry_size: u64,
+    base: PhysicalAddress,
+    count: u64,
+    entry_size: u64,
 }
 
 impl Table {
-    pub(crate) fn from_raw(raw: &RawTable) -> Self {
-        Self {
-            base: raw.base,
-            count: raw.count,
-            entry_size: raw.entry_size,
-        }
+    /// `None` when `count × entry_size` does not fit in `u64`
+    pub fn new(base: PhysicalAddress, count: u64, entry_size: u64) -> Option<Self> {
+        count.checked_mul(entry_size).map(|_| Self {
+            base,
+            count,
+            entry_size,
+        })
+    }
+
+    pub(crate) fn from_raw(raw: &RawTable) -> Option<Self> {
+        Self::new(raw.base, raw.count, raw.entry_size)
+    }
+
+    pub fn base(self) -> PhysicalAddress {
+        self.base
+    }
+
+    pub fn count(self) -> u64 {
+        self.count
+    }
+
+    pub fn entry_size(self) -> u64 {
+        self.entry_size
     }
 
     /// The bytes the entries occupy
     pub fn size(self) -> u64 {
-        self.count.saturating_mul(self.entry_size)
+        self.count * self.entry_size
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn table_refuses_entries_that_do_not_fit_in_u64() {
+        let base = PhysicalAddress::new(0x1000);
+        assert!(Table::new(base, u64::MAX, 2).is_none());
+        assert!(Table::new(base, 2, u64::MAX).is_none());
+    }
+
+    #[test]
+    fn table_size_is_the_product_up_to_the_limit() {
+        let base = PhysicalAddress::new(0x1000);
+        assert_eq!(Table::new(base, 3, 24).unwrap().size(), 72);
+        assert_eq!(Table::new(base, u64::MAX, 1).unwrap().size(), u64::MAX);
+        assert_eq!(Table::new(base, 0, 48).unwrap().size(), 0);
     }
 }
