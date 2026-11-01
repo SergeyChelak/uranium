@@ -49,10 +49,12 @@ impl<'a, M: Memory> Allocation<'a, M> {
         self.bytes
     }
 
-    /// Keeps the pages for the kernel: nothing frees them from now on. The
-    /// bytes outlive boot services; read `base` before leaking
-    pub fn leak(mut self) -> &'static mut [u8] {
-        mem::take(&mut self.bytes)
+    /// Keeps the pages for the kernel: nothing frees them from now on
+    pub fn leak(mut self) -> LeakedMemory {
+        LeakedMemory {
+            base: self.base,
+            bytes: mem::take(&mut self.bytes),
+        }
     }
 
     /// Hands the pages back to the firmware now, reporting its answer
@@ -60,6 +62,13 @@ impl<'a, M: Memory> Allocation<'a, M> {
         let bytes = mem::take(&mut self.bytes);
         self.memory.free(self.base, bytes)
     }
+}
+
+/// Memory the firmware will never reclaim: the kernel finds it by `base`,
+/// and the loader still reaches it through `bytes` until the handoff
+pub struct LeakedMemory {
+    pub base: PhysicalAddress,
+    pub bytes: &'static mut [u8],
 }
 
 impl<M: Memory> Drop for Allocation<'_, M> {
@@ -89,8 +98,9 @@ pub trait Memory {
     fn memory_map_size(&self) -> Result<usize, MemoryError>;
 }
 
-/// What a region of physical memory may be used for: the firmware's picture
-/// reduced to what the kernel must know
+/// What a region of physical memory may be used for, as the firmware's map
+/// tells it; the kinds the loader assigns itself (its own allocations) exist
+/// only in the boot protocol
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryKind {
     /// Free for the kernel once the loader is gone
@@ -109,7 +119,7 @@ pub enum MemoryKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MemoryRegion {
-    pub start: PhysicalAddress,
+    pub base: PhysicalAddress,
     pub page_count: u64,
     pub kind: MemoryKind,
 }
@@ -198,10 +208,11 @@ mod tests {
     }
 
     #[test]
-    fn leaked_pages_stay_allocated() {
+    fn leaked_pages_stay_allocated_and_keep_their_base() {
         let ledger = Ledger::new();
-        let bytes = ledger.allocate(1).unwrap().leak();
-        assert_eq!(bytes.len(), 4096);
+        let memory = ledger.allocate(1).unwrap().leak();
+        assert_eq!(memory.base, PhysicalAddress::new(0x1000));
+        assert_eq!(memory.bytes.len(), 4096);
         assert_eq!(ledger.outstanding.get(), 1);
     }
 

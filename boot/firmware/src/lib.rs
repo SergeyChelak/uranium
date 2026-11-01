@@ -15,6 +15,8 @@ pub use checkpoint::checkpoint;
 pub use console::{Console, ConsoleError};
 pub use error::{FirmwareError, FirmwareStatus};
 pub use firmware::{ExitError, Firmware};
-pub use memory::{Allocation, Memory, MemoryError, MemoryKind, MemoryMapSummary, MemoryRegion};
+pub use memory::{
+    Allocation, LeakedMemory, Memory, MemoryError, MemoryKind, MemoryMapSummary, MemoryRegion,
+};
 pub use platform::{Platform, PlatformError};
 pub use volume::{File, FileError, Volume};
