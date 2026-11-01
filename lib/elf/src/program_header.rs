@@ -110,6 +110,7 @@ impl SegmentKind {
 pub struct Segment<'a> {
     kind: SegmentKind,
     virtual_address: VirtualAddress,
+    end: VirtualAddress,
     bytes: &'a [u8],
     memory_size: u64,
     alignment: u64,
@@ -124,9 +125,10 @@ impl<'a> Segment<'a> {
     /// must hold its bytes
     pub(crate) fn from_raw(raw: &RawProgramHeader, file: Fields<'a>) -> Result<Self, ElfError> {
         let bytes = file.window(raw.offset, raw.file_size)?.bytes();
-        if raw.virtual_address.checked_add(raw.memory_size).is_none() {
-            return Err(ElfError::MemoryPastAddressSpace);
-        }
+        let end = raw
+            .virtual_address
+            .checked_add(raw.memory_size)
+            .ok_or(ElfError::MemoryPastAddressSpace)?;
         let kind = SegmentKind(raw.segment_type);
         if kind == SegmentKind::LOAD && raw.memory_size < raw.file_size {
             return Err(ElfError::MemorySmallerThanFile);
@@ -134,6 +136,7 @@ impl<'a> Segment<'a> {
         Ok(Self {
             kind,
             virtual_address: raw.virtual_address,
+            end,
             bytes,
             memory_size: raw.memory_size,
             alignment: raw.alignment,
@@ -178,11 +181,11 @@ impl<'a> Segment<'a> {
 
     /// The address just past the segment's memory
     pub fn end(&self) -> VirtualAddress {
-        self.virtual_address + self.memory_size
+        self.end
     }
 
     pub fn contains(&self, address: VirtualAddress) -> bool {
-        self.virtual_address <= address && address < self.end()
+        self.virtual_address <= address && address < self.end
     }
 }
 
@@ -210,6 +213,7 @@ mod tests {
                 Ok(Segment {
                     kind: SegmentKind::INTERPRETER,
                     virtual_address: VirtualAddress::new(0),
+                    end: VirtualAddress::new(4),
                     bytes: b"ld.\0",
                     memory_size: 4,
                     alignment: 0x1000,
@@ -220,6 +224,7 @@ mod tests {
                 Ok(Segment {
                     kind: SegmentKind::LOAD,
                     virtual_address: VirtualAddress::new(IMAGE_BASE),
+                    end: VirtualAddress::new(IMAGE_BASE + 4),
                     bytes: &[0x90; 4],
                     memory_size: 4,
                     alignment: 0x1000,
