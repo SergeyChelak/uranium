@@ -2,7 +2,7 @@ use core::mem::offset_of;
 use core::ptr;
 
 use crate::protocols::file::{File, FileProtocol};
-use crate::{Guid, Protocol, Status};
+use crate::{Guid, Protocol, Status, UefiError};
 
 // UEFI 2.11, 13.4.2
 type OpenVolumeFunction =
@@ -28,13 +28,13 @@ unsafe impl Protocol for SimpleFileSystemProtocol {
 
 impl SimpleFileSystemProtocol {
     /// Opens the root directory of the volume
-    pub fn open_volume(&self) -> Result<File<'_>, Status> {
+    pub fn open_volume(&self) -> Result<File<'_>, UefiError> {
         let mut root: *const FileProtocol = ptr::null();
         // SAFETY: `self` lives in a firmware protocol instance that is valid
         // while boot services run, and `root` outlives the call
         unsafe { (self.open_volume)(self, &mut root) }.into_result()?;
         // SAFETY: the firmware opened `root` for this caller, who now owns it
-        unsafe { File::from_raw(root) }.ok_or(Status::DEVICE_ERROR)
+        unsafe { File::from_raw(root) }.ok_or(UefiError::NullPointer)
     }
 }
 
@@ -43,8 +43,8 @@ const _: () = assert!(offset_of!(SimpleFileSystemProtocol, open_volume) == 8);
 #[cfg(test)]
 mod tests {
     use super::SimpleFileSystemProtocol;
-    use crate::Status;
     use crate::protocols::file::FileProtocol;
+    use crate::{Status, UefiError};
     use core::mem;
     use core::ptr::{self, NonNull};
 
@@ -92,7 +92,10 @@ mod tests {
             revision: 0,
             open_volume: refuse,
         };
-        assert_eq!(file_system.open_volume().err(), Some(Status::UNSUPPORTED));
+        assert_eq!(
+            file_system.open_volume().err(),
+            Some(UefiError::Firmware(Status::UNSUPPORTED))
+        );
     }
 
     #[test]
@@ -101,6 +104,9 @@ mod tests {
             revision: 0,
             open_volume: hand_back_nothing,
         };
-        assert_eq!(file_system.open_volume().err(), Some(Status::DEVICE_ERROR));
+        assert_eq!(
+            file_system.open_volume().err(),
+            Some(UefiError::NullPointer)
+        );
     }
 }

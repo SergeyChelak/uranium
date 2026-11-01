@@ -6,7 +6,7 @@ use core::ptr::{self, NonNull};
 use crate::firmware_pointer::UnusedFunctionPointer;
 use crate::protocols::file_information::{FILE_INFORMATION_ID, FileInformationBuffer};
 use crate::ucs2::encode_terminated;
-use crate::{Guid, SimpleFileSystemProtocol, Status};
+use crate::{Guid, SimpleFileSystemProtocol, Status, UefiError};
 
 // UEFI 2.11, 13.5.2
 type OpenFunction = unsafe extern "efiapi" fn(
@@ -81,9 +81,9 @@ impl<'b> File<'b> {
 
     /// Opens `path` (UEFI form, `\` separators) for reading relative to this
     /// directory
-    pub fn open(&self, path: &str) -> Result<File<'b>, Status> {
+    pub fn open(&self, path: &str) -> Result<File<'b>, UefiError> {
         let mut buffer = [0; PATH_CAPACITY + 1];
-        let name = encode_terminated(path, &mut buffer).ok_or(Status::INVALID_PARAMETER)?;
+        let name = encode_terminated(path, &mut buffer).ok_or(UefiError::PathTooLong)?;
         let mut opened: *const FileProtocol = ptr::null();
         // SAFETY: `name` is null-terminated, and `opened` outlives the call
         unsafe {
@@ -91,7 +91,7 @@ impl<'b> File<'b> {
         }
         .into_result()?;
         // SAFETY: the firmware opened `opened` for this caller, who now owns it
-        unsafe { File::from_raw(opened) }.ok_or(Status::DEVICE_ERROR)
+        unsafe { File::from_raw(opened) }.ok_or(UefiError::NullPointer)
     }
 
     /// The file size from `EFI_FILE_INFO`
@@ -154,7 +154,7 @@ mod tests {
     };
     use crate::firmware_pointer::UnusedFunctionPointer;
     use crate::protocols::file_information::{FILE_INFORMATION_ID, FileInformation};
-    use crate::{Guid, Status};
+    use crate::{Guid, Status, UefiError};
     use core::ffi::c_void;
     use core::mem::size_of;
     use core::ptr;
@@ -205,6 +205,18 @@ mod tests {
         _attributes: u64,
     ) -> Status {
         Status::DEVICE_ERROR
+    }
+
+    unsafe extern "efiapi" fn open_nothing(
+        _this: *const FileProtocol,
+        opened: *mut *const FileProtocol,
+        _name: *const u16,
+        _mode: u64,
+        _attributes: u64,
+    ) -> Status {
+        // SAFETY: the test passes a live out-pointer
+        unsafe { *opened = ptr::null() };
+        Status::SUCCESS
     }
 
     unsafe extern "efiapi" fn close_quietly(_this: *const FileProtocol) -> Status {
@@ -315,7 +327,17 @@ mod tests {
         assert_eq!(file.protocol, root.protocol);
         assert_eq!(
             root.open("\\URANIUM\\OTHER.CFG").err(),
-            Some(Status::NOT_FOUND)
+            Some(UefiError::Firmware(Status::NOT_FOUND))
+        );
+    }
+
+    #[test]
+    fn open_rejects_a_null_handle() {
+        let mut table = table_with(open_nothing, close_quietly, give_nothing, demand_more_room);
+        let root = file_over(&mut table);
+        assert_eq!(
+            root.open("\\URANIUM\\BOOT.CFG").err(),
+            Some(UefiError::NullPointer)
         );
     }
 
@@ -329,9 +351,12 @@ mod tests {
         );
         let root = file_over(&mut table);
         let longest = "x".repeat(PATH_CAPACITY);
-        assert_eq!(root.open(&longest).err(), Some(Status::DEVICE_ERROR));
+        assert_eq!(
+            root.open(&longest).err(),
+            Some(UefiError::Firmware(Status::DEVICE_ERROR))
+        );
         let too_long = "x".repeat(PATH_CAPACITY + 1);
-        assert_eq!(root.open(&too_long).err(), Some(Status::INVALID_PARAMETER));
+        assert_eq!(root.open(&too_long).err(), Some(UefiError::PathTooLong));
     }
 
     #[test]

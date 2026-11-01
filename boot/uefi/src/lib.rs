@@ -9,6 +9,7 @@ extern crate std;
 
 mod boot_services;
 mod configuration_table;
+mod error;
 mod firmware_pointer;
 mod guid;
 mod handle;
@@ -22,6 +23,7 @@ pub mod ucs2;
 
 pub use boot_services::BootServices;
 pub use configuration_table::ACPI_20_TABLE_GUID;
+pub use error::UefiError;
 pub use guid::Guid;
 pub use handle::Handle;
 pub use memory::{MemoryDescriptor, MemoryMap, MemoryMapKey, MemoryType, PAGE_SIZE};

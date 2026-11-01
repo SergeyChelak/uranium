@@ -6,7 +6,7 @@ use address::PhysicalAddress;
 
 use crate::firmware_pointer::{UnusedFirmwarePointer, UnusedFunctionPointer};
 use crate::memory::{AllocateKind, MemoryMap, MemoryMapKey, MemoryType};
-use crate::{Guid, Handle, Protocol, Status, TableHeader};
+use crate::{Guid, Handle, Protocol, Status, TableHeader, UefiError};
 
 // UEFI 2.11, 7.2.1
 type AllocatePagesFunction =
@@ -125,7 +125,7 @@ impl BootServices {
 
     /// Writes the current map into `buffer`; `BUFFER_TOO_SMALL` when it does
     /// not fit
-    pub fn get_memory_map<'a>(&self, buffer: &'a mut [u8]) -> Result<MemoryMap<'a>, Status> {
+    pub fn get_memory_map<'a>(&self, buffer: &'a mut [u8]) -> Result<MemoryMap<'a>, UefiError> {
         let mut size = buffer.len();
         let mut key = 0;
         let mut descriptor_size = 0;
@@ -142,7 +142,7 @@ impl BootServices {
             )
         }
         .into_result()?;
-        let written = buffer.get(..size).ok_or(Status::DEVICE_ERROR)?;
+        let written = buffer.get(..size).ok_or(UefiError::MalformedMemoryMap)?;
         MemoryMap::new(
             written,
             descriptor_size,
@@ -177,26 +177,26 @@ impl BootServices {
 
     /// The instance of `P` installed on `handle`; `UNSUPPORTED` when the
     /// handle has none
-    pub fn handle_protocol<P: Protocol>(&self, handle: Handle) -> Result<&P, Status> {
+    pub fn handle_protocol<P: Protocol>(&self, handle: Handle) -> Result<&P, UefiError> {
         let mut interface: *const c_void = ptr::null();
         // SAFETY: `self` lives in the boot services table, valid while boot
         // services run; the GUID and `interface` are live for the call
         unsafe { (self.handle_protocol)(handle, &P::GUID, &mut interface) }.into_result()?;
         // SAFETY: `Protocol` guarantees `P::GUID` names a `P`, and the firmware
         // returned a pointer to a live instance or null
-        unsafe { interface.cast::<P>().as_ref() }.ok_or(Status::UNSUPPORTED)
+        unsafe { interface.cast::<P>().as_ref() }.ok_or(UefiError::NullPointer)
     }
 
     /// Finds the first instance of `P` the firmware offers; `NOT_FOUND`
     /// when there is none
-    pub fn locate_protocol<P: Protocol>(&self) -> Result<&P, Status> {
+    pub fn locate_protocol<P: Protocol>(&self) -> Result<&P, UefiError> {
         let mut interface: *const c_void = ptr::null();
         // SAFETY: `self` lives in the boot services table, valid while boot
         // services run; the GUID and `interface` are live for the call
         unsafe { (self.locate_protocol)(&P::GUID, ptr::null(), &mut interface) }.into_result()?;
         // SAFETY: `Protocol` guarantees `P::GUID` names a `P`, and the firmware
         // returned a pointer to a live instance or null
-        unsafe { interface.cast::<P>().as_ref() }.ok_or(Status::NOT_FOUND)
+        unsafe { interface.cast::<P>().as_ref() }.ok_or(UefiError::NullPointer)
     }
 }
 
@@ -215,7 +215,7 @@ mod tests {
         FreePagesFunction, GetMemoryMapFunction, HandleProtocolFunction, LocateProtocolFunction,
         StallFunction,
     };
-    use crate::{Guid, Handle, MemoryMapKey, MemoryType, Protocol, Status};
+    use crate::{Guid, Handle, MemoryMapKey, MemoryType, Protocol, Status, UefiError};
     use address::PhysicalAddress;
     use core::ffi::c_void;
     use core::mem::MaybeUninit;
@@ -248,6 +248,16 @@ mod tests {
         // SAFETY: the test passes a live out-pointer
         unsafe { *interface = ptr::null() };
         Status::NOT_FOUND
+    }
+
+    unsafe extern "efiapi" fn claim_success_with_nothing(
+        _guid: *const Guid,
+        _registration: *const c_void,
+        interface: *mut *const c_void,
+    ) -> Status {
+        // SAFETY: the test passes a live out-pointer
+        unsafe { *interface = ptr::null() };
+        Status::SUCCESS
     }
 
     unsafe extern "efiapi" fn hand_back_the_guid_for_any_handle(
@@ -332,6 +342,20 @@ mod tests {
         unsafe { *descriptor_size = 40 };
         // SAFETY: the test passes live out-pointers
         unsafe { *descriptor_version = 1 };
+        Status::SUCCESS
+    }
+
+    unsafe extern "efiapi" fn claim_more_than_the_buffer(
+        size: *mut usize,
+        _map: *mut c_void,
+        _key: *mut usize,
+        descriptor_size: *mut usize,
+        _descriptor_version: *mut u32,
+    ) -> Status {
+        // SAFETY: the test passes live out-pointers
+        unsafe { *size = 400 };
+        // SAFETY: the test passes live out-pointers
+        unsafe { *descriptor_size = 40 };
         Status::SUCCESS
     }
 
@@ -423,7 +447,17 @@ mod tests {
     fn locate_protocol_reports_a_missing_protocol() {
         let table = table_with(Fakes::refusing());
         let result = table.locate_protocol::<Probe>();
-        assert_eq!(result.err(), Some(Status::NOT_FOUND));
+        assert_eq!(result.err(), Some(UefiError::Firmware(Status::NOT_FOUND)));
+    }
+
+    #[test]
+    fn locate_protocol_rejects_a_null_interface() {
+        let table = table_with(Fakes {
+            locate_protocol: claim_success_with_nothing,
+            ..Fakes::refusing()
+        });
+        let result = table.locate_protocol::<Probe>();
+        assert_eq!(result.err(), Some(UefiError::NullPointer));
     }
 
     #[test]
@@ -437,10 +471,10 @@ mod tests {
     }
 
     #[test]
-    fn handle_protocol_maps_unsupported() {
+    fn handle_protocol_reports_an_unsupported_protocol() {
         let table = table_with(Fakes::refusing());
         let result = table.handle_protocol::<Probe>(Handle::dangling());
-        assert_eq!(result.err(), Some(Status::UNSUPPORTED));
+        assert_eq!(result.err(), Some(UefiError::Firmware(Status::UNSUPPORTED)));
     }
 
     #[test]
@@ -503,6 +537,19 @@ mod tests {
         // SAFETY: as above
         let stale = unsafe { table.exit_boot_services(Handle::dangling(), MemoryMapKey(8)) };
         assert_eq!(stale, Err(Status::INVALID_PARAMETER));
+    }
+
+    #[test]
+    fn get_memory_map_rejects_a_size_beyond_the_buffer() {
+        let table = table_with(Fakes {
+            get_memory_map: claim_more_than_the_buffer,
+            ..Fakes::refusing()
+        });
+        let mut buffer = [0; 80];
+        assert_eq!(
+            table.get_memory_map(&mut buffer).err(),
+            Some(UefiError::MalformedMemoryMap)
+        );
     }
 
     #[test]

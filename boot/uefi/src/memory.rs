@@ -3,7 +3,7 @@ use core::ptr;
 
 use address::PhysicalAddress;
 
-use crate::Status;
+use crate::UefiError;
 
 // UEFI 2.11, 7.2.1, EFI_MEMORY_TYPE: the specification fixes only the order
 // of the variants; the values follow the C rules for an enum without initializers
@@ -114,18 +114,18 @@ pub struct MemoryMap<'a> {
 }
 
 impl<'a> MemoryMap<'a> {
-    /// `DEVICE_ERROR` when the firmware's descriptor is narrower than the
-    /// declared structure or the map does not hold whole descriptors
+    /// Rejects a descriptor narrower than the declared structure and a map
+    /// that does not hold whole descriptors
     pub(crate) fn new(
         bytes: &'a [u8],
         descriptor_size: usize,
         descriptor_version: u32,
         key: MemoryMapKey,
-    ) -> Result<Self, Status> {
+    ) -> Result<Self, UefiError> {
         if descriptor_size < size_of::<MemoryDescriptor>()
             || !bytes.len().is_multiple_of(descriptor_size)
         {
-            return Err(Status::DEVICE_ERROR);
+            return Err(UefiError::MalformedMemoryMap);
         }
         Ok(Self {
             bytes,
@@ -169,7 +169,7 @@ const _: () = assert!(size_of::<MemoryDescriptor>() == 40);
 #[cfg(test)]
 mod tests {
     use super::{MemoryDescriptor, MemoryMap, MemoryMapKey, MemoryType};
-    use crate::Status;
+    use crate::UefiError;
     use address::PhysicalAddress;
     use core::mem::size_of;
     use std::vec;
@@ -250,7 +250,7 @@ mod tests {
         let narrow = size_of::<MemoryDescriptor>() - 8;
         assert_eq!(
             MemoryMap::new(&bytes, narrow, 1, MemoryMapKey(1)).err(),
-            Some(Status::DEVICE_ERROR)
+            Some(UefiError::MalformedMemoryMap)
         );
     }
 
@@ -259,7 +259,7 @@ mod tests {
         let bytes = raw_map(&[descriptor(7, 0x1000, 2)]);
         assert_eq!(
             MemoryMap::new(&bytes[..STRIDE - 1], STRIDE, 1, MemoryMapKey(1)).err(),
-            Some(Status::DEVICE_ERROR)
+            Some(UefiError::MalformedMemoryMap)
         );
     }
 }

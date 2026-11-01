@@ -1,7 +1,7 @@
 use firmware::{ConsoleError, ExitError, FileError, Firmware, MemoryMapSummary, MemoryRegion};
 use uefi::{
     Handle, LoadedImageProtocol, ResetKind, SerialIoProtocol, SimpleFileSystemProtocol, Status,
-    SystemTable,
+    SystemTable, UefiError,
 };
 
 use crate::{SerialConsole, TextConsole, UefiMemory, UefiPlatform, UefiVolume, exit};
@@ -62,7 +62,7 @@ impl<'a> Firmware for UefiFirmware<'a> {
             .locate_protocol::<SerialIoProtocol>()
         {
             Ok(protocol) => Ok(SerialConsole::new(protocol)),
-            Err(Status::NOT_FOUND) => Err(ConsoleError::Unavailable),
+            Err(UefiError::Firmware(Status::NOT_FOUND)) => Err(ConsoleError::Unavailable),
             Err(_) => Err(ConsoleError::Device),
         }
     }

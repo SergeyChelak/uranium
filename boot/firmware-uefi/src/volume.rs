@@ -1,5 +1,5 @@
 use firmware::{FileError, Volume};
-use uefi::Status;
+use uefi::{Status, UefiError};
 
 pub struct UefiVolume<'b> {
     root: uefi::File<'b>,
@@ -36,11 +36,10 @@ impl firmware::File for UefiFile<'_> {
     }
 }
 
-// `uefi::File::open` answers `INVALID_PARAMETER` for a path it could not encode
-fn open_error(status: Status) -> FileError {
-    match status {
-        Status::NOT_FOUND => FileError::NotFound,
-        Status::INVALID_PARAMETER => FileError::PathTooLong,
+fn open_error(error: UefiError) -> FileError {
+    match error {
+        UefiError::Firmware(Status::NOT_FOUND) => FileError::NotFound,
+        UefiError::PathTooLong => FileError::PathTooLong,
         _ => FileError::Device,
     }
 }
@@ -49,25 +48,31 @@ fn open_error(status: Status) -> FileError {
 mod tests {
     use super::open_error;
     use firmware::FileError;
-    use uefi::Status;
+    use uefi::{Status, UefiError};
 
     #[test]
     fn not_found_means_the_file_is_missing() {
-        assert_eq!(open_error(Status::NOT_FOUND), FileError::NotFound);
-    }
-
-    #[test]
-    fn invalid_parameter_means_the_path_was_rejected() {
         assert_eq!(
-            open_error(Status::INVALID_PARAMETER),
-            FileError::PathTooLong
+            open_error(UefiError::Firmware(Status::NOT_FOUND)),
+            FileError::NotFound
         );
     }
 
     #[test]
-    fn every_other_status_is_a_device_failure() {
-        assert_eq!(open_error(Status::DEVICE_ERROR), FileError::Device);
-        assert_eq!(open_error(Status::UNSUPPORTED), FileError::Device);
-        assert_eq!(open_error(Status::OUT_OF_RESOURCES), FileError::Device);
+    fn a_rejected_path_is_too_long() {
+        assert_eq!(open_error(UefiError::PathTooLong), FileError::PathTooLong);
+    }
+
+    #[test]
+    fn every_other_error_is_a_device_failure() {
+        assert_eq!(
+            open_error(UefiError::Firmware(Status::DEVICE_ERROR)),
+            FileError::Device
+        );
+        assert_eq!(
+            open_error(UefiError::Firmware(Status::UNSUPPORTED)),
+            FileError::Device
+        );
+        assert_eq!(open_error(UefiError::NullPointer), FileError::Device);
     }
 }
