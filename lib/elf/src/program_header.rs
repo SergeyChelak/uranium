@@ -120,19 +120,17 @@ pub struct Segment {
 }
 
 impl Segment {
-    /// Reads an entry of `file`: its bytes must lie within the file, and a
-    /// loadable segment's memory must hold its bytes and fit the address
-    /// space
+    /// Reads an entry of `file`: its bytes must lie within the file, its
+    /// memory must fit the address space, and a loadable segment's memory
+    /// must hold its bytes
     pub(crate) fn from_raw(raw: &RawProgramHeader, file: Fields<'_>) -> Result<Self, ElfError> {
         file.window(raw.offset, raw.file_size)?;
+        if raw.virtual_address.checked_add(raw.memory_size).is_none() {
+            return Err(ElfError::MemoryPastAddressSpace);
+        }
         let kind = SegmentKind(raw.segment_type);
-        if kind == SegmentKind::LOAD {
-            if raw.memory_size < raw.file_size {
-                return Err(ElfError::MemorySmallerThanFile);
-            }
-            if raw.virtual_address.checked_add(raw.memory_size).is_none() {
-                return Err(ElfError::MemoryPastAddressSpace);
-            }
+        if kind == SegmentKind::LOAD && raw.memory_size < raw.file_size {
+            return Err(ElfError::MemorySmallerThanFile);
         }
         Ok(Self {
             kind,
@@ -272,6 +270,14 @@ mod tests {
     fn memory_past_the_end_of_the_address_space_is_an_error() {
         let bytes = Image::new()
             .segment(SegmentKind::LOAD, u64::MAX - 7, &[0u8; 8], 16, READ)
+            .build();
+        assert_eq!(segments(&bytes), [Err(ElfError::MemoryPastAddressSpace)]);
+    }
+
+    #[test]
+    fn memory_past_the_end_of_the_address_space_is_an_error_for_every_kind() {
+        let bytes = Image::new()
+            .segment(SegmentKind::NOTE, u64::MAX - 7, &[], 16, READ)
             .build();
         assert_eq!(segments(&bytes), [Err(ElfError::MemoryPastAddressSpace)]);
     }

@@ -40,7 +40,7 @@ pub enum ElfError {
     ProgramHeaderTooShort,
     /// A loadable segment claims less memory than it has bytes in the file
     MemorySmallerThanFile,
-    /// A loadable segment's memory runs past the end of the address space
+    /// A segment's memory runs past the end of the address space
     MemoryPastAddressSpace,
 }
 
