@@ -22,7 +22,7 @@ pub(crate) fn table_with_signature<'r, R: TableReader>(
 ) -> Result<&'r [u8], AcpiError> {
     let rsdp = Rsdp::parse(reader.bytes(rsdp, Rsdp::LENGTH)?)?;
     let xsdt = table_at(reader, rsdp.xsdt, &header_at(reader, rsdp.xsdt)?)?;
-    for entry in Xsdt::entries(xsdt)? {
+    for entry in Xsdt::parse(xsdt)?.entries() {
         let header = header_at(reader, entry)?;
         if header.signature == *signature {
             return table_at(reader, entry, &header);

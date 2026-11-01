@@ -9,20 +9,28 @@ use crate::{AcpiError, TableHeader};
 const SIGNATURE: &[u8; 4] = b"XSDT";
 const ENTRY_LENGTH: usize = 8;
 
-pub struct Xsdt;
+/// A verified XSDT over the bytes it was parsed from
+pub struct Xsdt<'a> {
+    entries: &'a [[u8; ENTRY_LENGTH]],
+}
 
-impl Xsdt {
-    /// The addresses of the other tables, offered only after the whole table
-    /// has been verified
-    pub fn entries(bytes: &[u8]) -> Result<impl Iterator<Item = PhysicalAddress> + '_, AcpiError> {
+impl<'a> Xsdt<'a> {
+    /// Checks the header, the signature, the checksum and that the body is
+    /// whole entries
+    pub fn parse(bytes: &'a [u8]) -> Result<Self, AcpiError> {
         let (_, table) = TableHeader::verify(bytes, SIGNATURE)?;
         let (entries, ragged_tail) = table.tail(TableHeader::LENGTH)?.as_chunks::<ENTRY_LENGTH>();
         if !ragged_tail.is_empty() {
             return Err(AcpiError::Length);
         }
-        Ok(entries
+        Ok(Self { entries })
+    }
+
+    /// The addresses of the other tables
+    pub fn entries(&self) -> impl Iterator<Item = PhysicalAddress> + 'a {
+        self.entries
             .iter()
-            .map(|entry| PhysicalAddress::new(u64::from_le_bytes(*entry))))
+            .map(|entry| PhysicalAddress::new(u64::from_le_bytes(*entry)))
     }
 }
 
@@ -37,7 +45,7 @@ mod tests {
     use crate::header::testing::table;
 
     fn addresses(bytes: &[u8]) -> Result<Vec<PhysicalAddress>, AcpiError> {
-        Xsdt::entries(bytes).map(Iterator::collect)
+        Xsdt::parse(bytes).map(|xsdt| xsdt.entries().collect())
     }
 
     #[test]
