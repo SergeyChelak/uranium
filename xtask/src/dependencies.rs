@@ -89,16 +89,9 @@ fn allowed_targets(from: Layer) -> &'static [Layer] {
         ],
         BootInterface => &[Library, BootInterface],
         BootBindings => &[Library],
-        BootImplementation => &[
-            Library,
-            HalContract,
-            HalImplementation,
-            BootInterface,
-            BootBindings,
-        ],
+        BootImplementation => &[Library, HalImplementation, BootInterface, BootBindings],
         BootRoot => &[
             Library,
-            HalContract,
             HalImplementation,
             BootInterface,
             BootBindings,
@@ -244,6 +237,34 @@ mod tests {
             found,
             [
                 "Dependency violation: boot-sequence depends on uefi, but a boot/interface crate may depend only on lib and boot/interface crates"
+            ]
+        );
+    }
+
+    #[test]
+    fn loader_implementation_never_calls_the_hal_contract() {
+        let found = messages(vec![
+            package("hal", "hal/contract", &[]),
+            package("handoff-x86_64", "boot/implementation", &["hal"]),
+        ]);
+        assert_eq!(
+            found,
+            [
+                "Dependency violation: handoff-x86_64 depends on hal, but a boot/implementation crate may depend only on lib, hal/implementation, boot/interface and boot/bindings crates"
+            ]
+        );
+    }
+
+    #[test]
+    fn loader_root_never_calls_the_hal_contract() {
+        let found = messages(vec![
+            package("hal", "hal/contract", &[]),
+            package("loader", "boot/root", &["hal"]),
+        ]);
+        assert_eq!(
+            found,
+            [
+                "Dependency violation: loader depends on hal, but a boot/root crate may depend only on lib, hal/implementation, boot/interface, boot/bindings and boot/implementation crates"
             ]
         );
     }
