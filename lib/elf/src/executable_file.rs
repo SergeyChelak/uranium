@@ -26,12 +26,16 @@ impl<E> From<ElfError> for ExecutableError<E> {
 
 /// An ELF file checked as an executable for one processor: every loadable
 /// segment passed the caller's placement rule, no two of them overlap, and
-/// the entry point lies in one of them. The segments are read from the
-/// file again whenever asked for, as the program header table already holds
-/// them; nothing is copied
+/// the entry point lies in one of them. What the check learned on the way,
+/// the lowest address, the interpreter and the presence of a dynamic
+/// linking table, is kept; the segments themselves are read from the file
+/// again whenever asked for, as the program header table already holds them
 #[derive(Clone, Copy)]
 pub struct ExecutableFile<'a> {
     file: ElfFile<'a>,
+    virtual_base: VirtualAddress,
+    interpreter: Option<&'a [u8]>,
+    dynamic: bool,
 }
 
 impl<'a> ExecutableFile<'a> {
@@ -53,9 +57,17 @@ impl<'a> ExecutableFile<'a> {
         if header.machine != machine {
             return Err(ExecutableError::WrongMachine(header.machine));
         }
+        let mut interpreter = None;
+        let mut dynamic = false;
+        let mut lowest: Option<VirtualAddress> = None;
         let mut entry_inside_segments = false;
         for (index, segment) in file.segments().enumerate() {
             let segment = segment?;
+            match segment.kind() {
+                SegmentKind::INTERPRETER => interpreter = Some(segment.bytes()),
+                SegmentKind::DYNAMIC => dynamic = true,
+                _ => {}
+            }
             if !loads_memory(&segment) {
                 continue;
             }
@@ -63,12 +75,19 @@ impl<'a> ExecutableFile<'a> {
             if overlaps_an_earlier_segment(&file, index, &segment)? {
                 return Err(ExecutableError::SegmentsOverlap);
             }
+            let address = segment.virtual_address();
+            lowest = Some(lowest.map_or(address, |lowest| lowest.min(address)));
             entry_inside_segments |= segment.contains(header.entry);
         }
-        if !entry_inside_segments {
-            return Err(ExecutableError::EntryOutsideSegments);
+        match lowest {
+            Some(virtual_base) if entry_inside_segments => Ok(Self {
+                file,
+                virtual_base,
+                interpreter,
+                dynamic,
+            }),
+            _ => Err(ExecutableError::EntryOutsideSegments),
         }
-        Ok(Self { file })
     }
 
     pub fn entry(&self) -> VirtualAddress {
@@ -77,10 +96,7 @@ impl<'a> ExecutableFile<'a> {
 
     /// The lowest address any segment occupies
     pub fn virtual_base(&self) -> VirtualAddress {
-        self.segments()
-            .map(|segment| segment.virtual_address())
-            .min()
-            .expect("an executable has a segment: the one holding its entry")
+        self.virtual_base
     }
 
     /// The loadable segments that occupy memory, in file order
@@ -91,15 +107,12 @@ impl<'a> ExecutableFile<'a> {
     /// The path of the program interpreter, as the file holds it with its
     /// terminating zero, when the file asks for one
     pub fn interpreter(&self) -> Option<&'a [u8]> {
-        self.entries()
-            .find(|segment| segment.kind() == SegmentKind::INTERPRETER)
-            .map(|segment| segment.bytes())
+        self.interpreter
     }
 
     /// Whether the file carries a dynamic linking table
     pub fn is_dynamic(&self) -> bool {
-        self.entries()
-            .any(|segment| segment.kind() == SegmentKind::DYNAMIC)
+        self.dynamic
     }
 
     /// Every entry of the program header table; `new` read each of them
@@ -187,6 +200,23 @@ mod tests {
         assert!(segments[2].is_writable() && !segments[2].is_executable());
         assert_eq!(executable.interpreter(), None);
         assert!(!executable.is_dynamic());
+    }
+
+    #[test]
+    fn virtual_base_is_the_lowest_address_in_any_order() {
+        let bytes = Image::new()
+            .header(|header| header.entry = VirtualAddress::new(IMAGE_BASE + 0x1000))
+            .segment(
+                SegmentKind::LOAD,
+                IMAGE_BASE + 0x1000,
+                &[0x90; 8],
+                8,
+                READ | EXECUTE,
+            )
+            .segment(SegmentKind::LOAD, IMAGE_BASE, &[0xaa; 8], 8, READ)
+            .build();
+        let executable = executable(&bytes).unwrap();
+        assert_eq!(executable.virtual_base(), VirtualAddress::new(IMAGE_BASE));
     }
 
     #[test]
