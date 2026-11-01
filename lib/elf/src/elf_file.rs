@@ -42,7 +42,7 @@ impl<'a> ElfFile<'a> {
 
     /// Every entry of the program header table, in table order; an entry
     /// whose bytes reach past the file is an error in its place
-    pub fn segments(&self) -> impl Iterator<Item = Result<Segment, ElfError>> + 'a {
+    pub fn segments(&self) -> impl Iterator<Item = Result<Segment, ElfError>> + use<'a> {
         let file = Fields::new(self.bytes);
         self.program_headers
             .entries()
@@ -186,5 +186,18 @@ mod tests {
         let file = ElfFile::parse(&bytes).unwrap();
         let segment = file.segments().next().unwrap().unwrap();
         assert_eq!(file.segment_bytes(&segment), [1, 2, 3]);
+    }
+
+    #[test]
+    fn segments_borrow_the_bytes_not_the_file() {
+        fn segments_of(bytes: &[u8]) -> impl Iterator<Item = Result<Segment, ElfError>> {
+            let file = ElfFile::parse(bytes).unwrap();
+            file.segments()
+        }
+
+        let bytes = Image::new()
+            .segment(SegmentKind::LOAD, IMAGE_BASE, &[1, 2, 3], 0x100, READ)
+            .build();
+        assert_eq!(segments_of(&bytes).count(), 1);
     }
 }

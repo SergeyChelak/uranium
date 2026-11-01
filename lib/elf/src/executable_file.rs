@@ -84,7 +84,7 @@ impl<'a> ExecutableFile<'a> {
     }
 
     /// The loadable segments that occupy memory, in file order
-    pub fn segments(&self) -> impl Iterator<Item = Segment> + 'a {
+    pub fn segments(&self) -> impl Iterator<Item = Segment> + use<'a> {
         self.entries().filter(loads_memory)
     }
 
@@ -110,7 +110,7 @@ impl<'a> ExecutableFile<'a> {
 
     /// Every entry of the program header table; `new` read each of them
     /// once already, so none can fail now
-    fn entries(&self) -> impl Iterator<Item = Segment> + 'a {
+    fn entries(&self) -> impl Iterator<Item = Segment> + use<'a> {
         self.file
             .segments()
             .map(|segment| segment.expect("every entry was read when the executable was made"))
@@ -303,6 +303,17 @@ mod tests {
             .build();
         let executable = executable(&bytes).unwrap();
         assert_eq!(executable.segments().count(), 3);
+    }
+
+    #[test]
+    fn segments_borrow_the_bytes_not_the_executable() {
+        fn segments_of(bytes: &[u8]) -> impl Iterator<Item = Segment> {
+            let executable = executable(bytes).unwrap();
+            executable.segments()
+        }
+
+        let bytes = kernel().build();
+        assert_eq!(segments_of(&bytes).count(), 3);
     }
 
     #[test]
