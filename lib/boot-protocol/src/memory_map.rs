@@ -87,7 +87,8 @@ pub struct MemoryRegion {
 impl MemoryRegion {
     /// `None` for an entry without memory behind it
     fn decode(entry: &[u8]) -> Option<Self> {
-        let raw = RawMemoryRegion::decode(&mut Decoder::new(entry)).ok()?;
+        let raw = RawMemoryRegion::decode(&mut Decoder::new(entry))
+            .expect("the entry size was checked by BootInformation::decode");
         let range = PhysicalRange::new(raw.base, raw.size)?;
         Some(Self {
             range,
