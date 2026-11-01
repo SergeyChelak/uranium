@@ -16,7 +16,6 @@ pub struct SimpleTextOutputProtocol {
 }
 
 impl SimpleTextOutputProtocol {
-    /// Writes the text chunk by chunk and stops at the first error
     pub fn write_str(&self, text: &str) -> Result<(), Status> {
         let mut encoder = Encoder::new(text);
         let mut buffer = [0; CHUNK_LENGTH + 1];

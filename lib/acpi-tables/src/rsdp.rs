@@ -1,6 +1,3 @@
-//! The Root System Description Pointer (RSDP): the structure the firmware
-//! leaves in its configuration tables to say where the other ACPI tables are
-
 use address::PhysicalAddress;
 
 use byte_fields::Fields;
@@ -17,7 +14,6 @@ const XSDT_ADDRESS_OFFSET: usize = 24;
 // ACPI 6.6, 5.2.5.3: the XSDT address exists from revision 2
 const XSDT_REVISION: u8 = 2;
 
-/// The root pointer, reduced to the one address the loader follows
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Rsdp {
     pub xsdt: PhysicalAddress,
@@ -60,7 +56,6 @@ pub(crate) mod testing {
     use super::Rsdp;
     use crate::header::testing::with_checksum;
 
-    /// A root pointer with both checksums in place
     pub(crate) fn rsdp(revision: u8, length: u32, xsdt: u64) -> Vec<u8> {
         let mut bytes = [0u8; Rsdp::LENGTH];
         bytes[..8].copy_from_slice(b"RSD PTR ");

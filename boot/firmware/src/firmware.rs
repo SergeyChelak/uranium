@@ -5,19 +5,14 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExitError {
-    /// The memory map kept changing between reading it and leaving, and the
-    /// loader gave up retrying
     MapChangedTooOften,
-    /// The buffer for the firmware's own map is smaller than the map
     MapBufferTooSmall,
-    /// The map holds more regions than the buffer for the converted ones
     RegionsBufferTooSmall,
-    /// The firmware failed the call
     Firmware(FirmwareError),
 }
 
-/// Everything the boot sequence needs from the firmware. Its consoles and
-/// volume borrow it, so none of them survives the exit from boot services:
+/// Its consoles and volume borrow it, so none of them survives the exit
+/// from boot services:
 ///
 /// ```compile_fail,E0505
 /// use firmware::{Console, Firmware, MemoryRegion};
@@ -47,17 +42,14 @@ pub trait Firmware {
 
     fn serial_console(&self) -> Result<Self::SerialConsole<'_>, ConsoleError>;
 
-    /// The volume the loader was started from
     fn boot_volume(&self) -> Result<Self::Volume<'_>, FileError>;
 
     fn memory(&self) -> &Self::Memory;
 
     fn platform(&self) -> &Self::Platform;
 
-    /// Takes the final memory map and leaves boot services; after this only
-    /// the buffers filled here are valid. `raw` receives the firmware's own
-    /// map, `regions` the converted one. Nothing may be allocated or printed
-    /// between the map and the exit, which is why both happen in this one call
+    /// Nothing may be allocated or printed between taking the map and the exit,
+    /// which is why both happen in this one call
     fn exit_boot_services(
         self,
         raw: &mut [u8],

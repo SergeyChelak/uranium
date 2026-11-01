@@ -42,12 +42,10 @@ pub fn run(arguments: lexopt::Parser) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Checkpoint files live in `smoke/` at the workspace root, one `<name>.txt` per probe
 fn checkpoint_file(root: &Path, name: &str) -> PathBuf {
     root.join("smoke").join(format!("{name}.txt"))
 }
 
-/// Boots the platform in QEMU and waits for the checkpoints on the serial port
 fn probe(
     workspace: &Workspace,
     platform: Platform,

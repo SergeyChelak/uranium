@@ -49,8 +49,6 @@ pub(crate) struct ProgramHeaderTable<'a> {
 }
 
 impl<'a> ProgramHeaderTable<'a> {
-    /// Locates the table within `file`: an entry must hold the structure
-    /// and the whole table must lie within the file
     pub(crate) fn locate(
         file: Fields<'a>,
         offset: u64,
@@ -68,8 +66,6 @@ impl<'a> ProgramHeaderTable<'a> {
         })
     }
 
-    /// The entries in table order, read with a cursor that steps over the
-    /// bytes an entry has beyond the structure
     pub(crate) fn entries(
         self,
     ) -> impl Iterator<Item = Result<RawProgramHeader, OutOfBounds>> + 'a {
@@ -83,9 +79,8 @@ impl<'a> ProgramHeaderTable<'a> {
     }
 }
 
-/// The `p_type` code: what a program header entry describes. Ranges are
-/// left to operating systems and processors, so any code is a value and
-/// the named ones are those the base document defines
+/// The `p_type` code; any code is a value, because the specification leaves
+/// ranges to operating systems and processors
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SegmentKind(u32);
 
@@ -103,9 +98,7 @@ impl SegmentKind {
     }
 }
 
-/// One entry of the program header table: the bytes the file holds for it
-/// describe `memory_size` bytes at `virtual_address`; for a loadable segment
-/// the memory beyond those bytes is zero
+/// For a loadable segment the memory beyond the bytes of the file is zero
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Segment<'a> {
     kind: SegmentKind,
@@ -120,9 +113,6 @@ pub struct Segment<'a> {
 }
 
 impl<'a> Segment<'a> {
-    /// Reads an entry of `file`: its bytes must lie within the file, its
-    /// memory must fit the address space, and a loadable segment's memory
-    /// must hold its bytes
     pub(crate) fn from_raw(raw: &RawProgramHeader, file: Fields<'a>) -> Result<Self, ElfError> {
         let bytes = file.window(raw.offset, raw.file_size)?.bytes();
         let end = raw
@@ -154,7 +144,6 @@ impl<'a> Segment<'a> {
         self.virtual_address
     }
 
-    /// The bytes the file holds for the segment
     pub fn bytes(&self) -> &'a [u8] {
         self.bytes
     }
@@ -179,7 +168,6 @@ impl<'a> Segment<'a> {
         self.executable
     }
 
-    /// The address just past the segment's memory
     pub fn end(&self) -> VirtualAddress {
         self.end
     }

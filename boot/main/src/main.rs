@@ -14,8 +14,6 @@ use uefi::{Handle, Status, SystemTable};
 
 const GREETING: &str = "uranium loader started";
 
-/// The entry point the firmware calls after loading the image
-///
 /// # Safety
 ///
 /// Only the firmware calls this, with the handle of this image and a pointer

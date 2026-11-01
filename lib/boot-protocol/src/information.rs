@@ -12,8 +12,6 @@ use crate::{
 };
 
 structure! {
-    /// What the loader writes into memory and the kernel finds through the
-    /// register of its first argument
     pub struct RawBootInformation {
         pub(crate) magic: u64,
         pub(crate) version: u32,
@@ -43,8 +41,6 @@ impl RawBootInformation {
     pub(crate) const VERSION: u32 = 0;
     pub(crate) const SIZE: u32 = 264;
 
-    /// The structure the loader left at the start of `bytes`; `None` when
-    /// there are fewer bytes than the structure takes
     pub fn read_from(bytes: &[u8]) -> Option<Self> {
         Self::decode(&mut Decoder::new(bytes)).ok()
     }
@@ -73,7 +69,6 @@ layout!(RawBootInformation, RawBootInformation::SIZE as usize, {
     serial_console: 248,
 });
 
-/// Which check of `BootInformation::decode` failed
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BootInformationError {
     Magic,
@@ -85,14 +80,11 @@ pub enum BootInformationError {
     TableTooLarge(&'static str),
 }
 
-/// The caller gave `memory_regions` fewer bytes than the table occupies
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TableTooShort {
     pub needed: u64,
 }
 
-/// The loader's hand-off, checked once by `decode`: what the check produced
-/// is kept as typed values, the rest is read in place
 pub struct BootInformation<'a> {
     raw: &'a RawBootInformation,
     kernel_image: PhysicalRange,
@@ -171,9 +163,7 @@ impl<'a> BootInformation<'a> {
         self.memory_map
     }
 
-    /// The regions of the memory map, decoded from exactly the bytes the
-    /// table occupies at the start of `table`; an entry shorter than its
-    /// structure is reported in its place
+    /// The map lies at the start of `table`; bytes beyond it are ignored
     pub fn memory_regions(
         &self,
         table: &'a [u8],

@@ -36,8 +36,8 @@ impl LoadedImageProtocol {
         self.device_handle
     }
 
-    /// The bytes the boot manager or shell attached to the image, in the
-    /// encoding they chose; `None` when the image was started without any
+    /// In whatever encoding the boot manager or shell chose; `None` when the
+    /// image was started without any
     pub fn load_options(&self) -> Option<&[u8]> {
         if self.load_options.is_null() || self.load_options_size == 0 {
             return None;

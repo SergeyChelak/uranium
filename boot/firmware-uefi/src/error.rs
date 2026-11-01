@@ -1,7 +1,6 @@
 use firmware::{FirmwareError, FirmwareStatus};
 use uefi::{ProtocolError, Status};
 
-/// The firmware's status word, carried on without interpretation
 pub(crate) fn firmware_status(status: Status) -> FirmwareError {
     FirmwareError::Status(FirmwareStatus::new(status.raw()))
 }

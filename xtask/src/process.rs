@@ -8,13 +8,10 @@ use anyhow::Context;
 
 use crate::cargo::describe;
 
-/// How a run under `run_until` came to an end
 #[derive(Debug)]
 pub enum Ending {
-    /// The `stop` callback asked for the end; the child was killed
     Stopped,
     Exited(ExitStatus),
-    /// The timeout passed first; the child was killed
     TimedOut,
 }
 

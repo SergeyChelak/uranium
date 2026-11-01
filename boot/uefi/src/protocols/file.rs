@@ -49,8 +49,7 @@ pub(crate) struct FileProtocol {
     get_info: GetInfoFunction,
 }
 
-/// An open file or directory, closed on drop; it never outlives the file
-/// system it was opened from:
+/// Never outlives the file system it was opened from:
 ///
 /// ```compile_fail,E0597
 /// let root;
@@ -66,9 +65,6 @@ pub struct File<'b> {
 }
 
 impl<'b> File<'b> {
-    /// Takes ownership of a file handle the firmware opened; `None` when it
-    /// is null
-    ///
     /// # Safety
     ///
     /// `protocol` must be what the firmware wrote for `OpenVolume` or `Open`
@@ -95,7 +91,6 @@ impl<'b> File<'b> {
         Ok(unsafe { File::from_raw(opened) }.ok_or(ProtocolError::NullPointer)?)
     }
 
-    /// The file size from `EFI_FILE_INFO`
     pub fn size(&self) -> Result<u64, Status> {
         let mut buffer = MaybeUninit::<FileInformationBuffer>::zeroed();
         let mut size = size_of::<FileInformationBuffer>();

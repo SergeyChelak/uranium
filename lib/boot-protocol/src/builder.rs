@@ -20,9 +20,6 @@ pub enum BuildError {
     },
 }
 
-/// Collects the typed values the loader has and lays the wire format out in
-/// the loader's data block; `write_into` refuses to write before every
-/// required value is set
 pub struct BootInformationBuilder<'a> {
     physical_map_base: VirtualAddress,
     kernel_image: Option<(PhysicalRange, VirtualAddress)>,
@@ -130,9 +127,8 @@ impl<'a> BootInformationBuilder<'a> {
         }
     }
 
-    /// Lays the structure, the memory regions and the command line out in
-    /// `block`, whose first byte is at `block_base`, and returns the address
-    /// of the structure, the one the kernel receives in its first argument
+    /// Returns the address of the structure, the one the kernel receives in its
+    /// first argument
     pub fn write_into(
         self,
         block_base: PhysicalAddress,
@@ -189,7 +185,6 @@ impl<'a> BootInformationBuilder<'a> {
     }
 }
 
-/// The structure, the regions table and the command line, one after another
 fn lay_out(
     block: &mut [u8],
     raw: &RawBootInformation,

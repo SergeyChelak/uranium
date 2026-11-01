@@ -1,15 +1,9 @@
-//! The way from the root pointer to any other table: RSDP names the XSDT, the
-//! XSDT lists every table, and each table starts with the header that names it
-
 use address::PhysicalAddress;
 
 use crate::{AcpiError, Rsdp, TableHeader, Xsdt};
 
-/// Where the bytes of a firmware table come from: identity-mapped memory in
-/// the loader, the physical window in the kernel
 pub trait TableReader {
-    /// `length` bytes of the table at `address`; `Address` when the range is
-    /// not readable firmware memory
+    /// `Address` when the range is not readable firmware memory
     fn bytes(&self, address: PhysicalAddress, length: usize) -> Result<&[u8], AcpiError>;
 }
 
@@ -58,8 +52,6 @@ pub(crate) mod testing {
     use crate::AcpiError;
     use crate::header::testing::table;
 
-    /// Firmware memory with a table at each address: a slice of the requested
-    /// length from a table, `Address` for any other range
     pub(crate) struct Tables(pub(crate) BTreeMap<PhysicalAddress, Vec<u8>>);
 
     impl TableReader for Tables {

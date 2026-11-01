@@ -34,8 +34,7 @@ impl RawFramebuffer {
     };
 }
 
-/// The byte order of a pixel in the framebuffer; the discriminant is the
-/// code that travels in the wire format
+/// The discriminant is the code of the wire format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PixelFormat {
     Unknown = 0,

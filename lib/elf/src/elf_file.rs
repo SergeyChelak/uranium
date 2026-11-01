@@ -4,8 +4,6 @@ use crate::ElfError;
 use crate::header::{CURRENT_VERSION, Header, RawHeader};
 use crate::program_header::{ProgramHeaderTable, Segment};
 
-/// An ELF file over its bytes: the header read and checked, the program
-/// header table located within the bytes
 #[derive(Clone, Copy)]
 pub struct ElfFile<'a> {
     bytes: &'a [u8],
@@ -14,9 +12,8 @@ pub struct ElfFile<'a> {
 }
 
 impl<'a> ElfFile<'a> {
-    /// Reads the header at the start of `bytes` and locates the program
-    /// header table within them; the only checks are that the file is one
-    /// this crate can read and that it is consistent with itself
+    /// The only checks are that the file is one this crate can read and that
+    /// it is consistent with itself
     pub fn parse(bytes: &'a [u8]) -> Result<Self, ElfError> {
         let raw = RawHeader::decode(&mut Decoder::new(bytes))?;
         raw.identification.check()?;
@@ -40,8 +37,6 @@ impl<'a> ElfFile<'a> {
         self.header
     }
 
-    /// Every entry of the program header table, in table order; an entry
-    /// whose bytes reach past the file is an error in its place
     pub fn segments(&self) -> impl Iterator<Item = Result<Segment<'a>, ElfError>> + use<'a> {
         let file = Fields::new(self.bytes);
         self.program_headers

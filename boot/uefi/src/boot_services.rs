@@ -85,7 +85,6 @@ impl BootServices {
         self.header.has_signature(SIGNATURE)
     }
 
-    /// Allocates `count` pages of `memory_type` wherever the firmware chooses
     pub fn allocate_pages(
         &self,
         memory_type: MemoryType,
@@ -99,8 +98,6 @@ impl BootServices {
         Ok(PhysicalAddress::new(memory))
     }
 
-    /// Returns `count` pages at `address`, allocated by `allocate_pages`, to
-    /// the firmware
     pub fn free_pages(&self, address: PhysicalAddress, count: usize) -> Result<(), Status> {
         // SAFETY: `self` lives in the boot services table, valid while boot
         // services run
@@ -197,8 +194,7 @@ impl BootServices {
         unsafe { interface.cast::<P>().as_ref() }.ok_or(ProtocolError::NullPointer)
     }
 
-    /// Finds the first instance of `P` the firmware offers; `NOT_FOUND`
-    /// when there is none
+    /// `NOT_FOUND` when the firmware offers none
     pub fn locate_protocol<P: Protocol>(&self) -> Result<&P, ProtocolError> {
         let mut interface: *const c_void = ptr::null();
         // SAFETY: `self` lives in the boot services table, valid while boot
@@ -224,7 +220,6 @@ pub(crate) mod testing {
     use super::tests::{Fakes, table_with};
     use crate::TableHeader;
 
-    /// A table that refuses every call, under the given header
     pub(crate) fn table_with_header(header: TableHeader) -> BootServices {
         let mut table = table_with(Fakes::refusing());
         table.header = header;
@@ -408,7 +403,6 @@ mod tests {
     }
 
     impl Fakes {
-        /// Fakes that refuse every call; a test overrides the one it exercises
         pub(super) fn refusing() -> Self {
             Self {
                 handle_protocol: support_nothing,

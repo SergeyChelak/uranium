@@ -60,7 +60,7 @@
 /// leaves between fields is spelled out as a field, as `padding` is above;
 /// a packed layout cannot be declared this way and is read through `Fields`
 /// at the offsets the document names. `layout!` pins the result to the
-/// document's numbers.
+/// document's numbers
 #[macro_export]
 macro_rules! structure {
     (

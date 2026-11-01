@@ -2,15 +2,11 @@ use crate::FirmwareError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileError {
-    /// The volume has no file of that name
     NotFound,
-    /// The path is longer than the firmware accepts
     PathTooLong,
     /// The file ended before the buffer was full
     Short,
-    /// The image was not started from a volume, so there is nothing to open
     NoBootVolume,
-    /// The firmware failed the call
     Firmware(FirmwareError),
 }
 
@@ -20,7 +16,6 @@ impl From<FirmwareError> for FileError {
     }
 }
 
-/// The volume the loader was started from, read-only
 pub trait Volume {
     type File: File;
 
@@ -28,14 +23,13 @@ pub trait Volume {
     fn open(&self, path: &str) -> Result<Self::File, FileError>;
 }
 
-/// An open file; its size is known from the moment it was opened
 pub trait File {
     fn size(&self) -> u64;
 
     /// Reads at the current position; `Ok(0)` at the end
     fn read(&mut self, buffer: &mut [u8]) -> Result<usize, FileError>;
 
-    /// Fills the whole buffer or fails; `Short` when the file ends first
+    /// `Short` when the file ends first
     fn read_exact(&mut self, mut buffer: &mut [u8]) -> Result<(), FileError> {
         while !buffer.is_empty() {
             let read = self.read(buffer)?;
@@ -57,7 +51,6 @@ mod tests {
 
     const FAILURE: FileError = FileError::Firmware(FirmwareError::NullPointer);
 
-    /// A file whose firmware hands out at most `chunk` bytes per read
     struct ChunkedFile {
         content: &'static [u8],
         position: usize,
@@ -90,7 +83,6 @@ mod tests {
         }
     }
 
-    /// A file whose firmware claims one byte more than the buffer holds
     struct OverclaimingFile;
 
     impl File for OverclaimingFile {

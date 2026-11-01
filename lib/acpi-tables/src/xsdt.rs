@@ -1,6 +1,3 @@
-//! The Extended System Description Table (XSDT): the list of 64-bit
-//! addresses of every other ACPI table
-
 use address::PhysicalAddress;
 
 use crate::{AcpiError, TableHeader};
@@ -9,14 +6,11 @@ use crate::{AcpiError, TableHeader};
 const SIGNATURE: &[u8; 4] = b"XSDT";
 const ENTRY_LENGTH: usize = 8;
 
-/// A verified XSDT over the bytes it was parsed from
 pub struct Xsdt<'a> {
     entries: &'a [[u8; ENTRY_LENGTH]],
 }
 
 impl<'a> Xsdt<'a> {
-    /// Checks the header, the signature, the checksum and that the body is
-    /// whole entries
     pub fn parse(bytes: &'a [u8]) -> Result<Self, AcpiError> {
         let (_, table) = TableHeader::verify(bytes, SIGNATURE)?;
         let (entries, ragged_tail) = table.tail(TableHeader::LENGTH)?.as_chunks::<ENTRY_LENGTH>();
@@ -26,7 +20,6 @@ impl<'a> Xsdt<'a> {
         Ok(Self { entries })
     }
 
-    /// The addresses of the other tables
     pub fn entries(&self) -> impl Iterator<Item = PhysicalAddress> + 'a {
         self.entries
             .iter()

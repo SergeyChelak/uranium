@@ -18,9 +18,8 @@ pub fn parse(text: &str) -> anyhow::Result<Vec<String>> {
     Ok(checkpoints)
 }
 
-/// Lines expected on the serial port in this order; each is matched as a substring.
 /// Only the next pending checkpoint can match, so a line repeated in a loop never
-/// advances past it, and nothing can be reached twice
+/// advances past it
 pub struct Checkpoints {
     reached: Vec<String>,
     pending: VecDeque<String>,
@@ -55,7 +54,6 @@ impl Checkpoints {
         self.reached.len() + self.pending.len()
     }
 
-    /// Explains a run that ended before the last checkpoint, given everything it printed
     pub fn report(&self, output: &str) -> String {
         let mut report = format!(
             "reached {} of {} checkpoints",

@@ -9,8 +9,6 @@ use serde::Deserialize;
 
 use crate::platform::Platform;
 
-/// A UEFI firmware for QEMU: the flash image with its code and the template
-/// of its variable store
 #[derive(Debug, PartialEq, Eq)]
 pub struct Firmware {
     pub code: PathBuf,
@@ -140,8 +138,6 @@ fn json_file_name(path: &Path) -> Option<String> {
     name.ends_with(".json").then(|| name.to_owned())
 }
 
-/// The first descriptor, by file name, that offers UEFI on flash for the
-/// platform's machine and does not demand secure boot
 fn select(descriptors: &[(String, Descriptor)], platform: Platform) -> Option<Firmware> {
     descriptors
         .iter()

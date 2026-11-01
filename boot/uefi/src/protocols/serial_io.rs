@@ -31,7 +31,6 @@ unsafe impl Protocol for SerialIoProtocol {
 }
 
 impl SerialIoProtocol {
-    /// Sends the bytes and returns how many the device took
     pub fn write(&self, bytes: &[u8]) -> Result<usize, Status> {
         let mut size = bytes.len();
         // SAFETY: `self` lives in a firmware protocol instance that is valid

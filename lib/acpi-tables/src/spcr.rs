@@ -1,6 +1,3 @@
-//! The Serial Port Console Redirection table (SPCR): the ACPI table, defined
-//! by Microsoft, that describes the serial port meant for a console
-
 use address::PhysicalAddress;
 
 use crate::lookup::{TableReader, table_with_signature};
@@ -34,7 +31,6 @@ pub struct Spcr {
 }
 
 impl Spcr {
-    /// The table the firmware published, reached through RSDP and XSDT
     pub fn find<R: TableReader>(reader: &R, rsdp: PhysicalAddress) -> Result<Self, AcpiError> {
         Self::parse(table_with_signature(reader, rsdp, SIGNATURE)?)
     }

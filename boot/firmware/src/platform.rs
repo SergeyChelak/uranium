@@ -7,11 +7,8 @@ use crate::FirmwareError;
 pub enum PlatformError {
     /// The firmware has no ACPI tables, or none with the requested signature
     MissingTable,
-    /// The ACPI tables are there but broken on the way to the requested one
     Acpi(AcpiError),
-    /// The load options do not fit the buffer
     LoadOptionsTooLong,
-    /// The firmware failed the call
     Firmware(FirmwareError),
 }
 
@@ -30,20 +27,14 @@ impl From<AcpiError> for PlatformError {
     }
 }
 
-/// What the loader learns about the machine from the firmware besides files
-/// and memory
 pub trait Platform {
-    /// The firmware's system table, handed on to the kernel
     fn system_table_address(&self) -> PhysicalAddress;
 
-    /// The root of the ACPI tables, when the firmware installed one
     fn rsdp_address(&self) -> Option<PhysicalAddress>;
 
-    /// The serial port console redirection table, parsed and verified
     fn spcr(&self) -> Result<Spcr, PlatformError>;
 
-    /// The image's load options as UTF-8 in `buffer`; the number of bytes
-    /// written, zero when there are none
+    /// As UTF-8; zero bytes when there are none
     fn load_options(&self, buffer: &mut [u8]) -> Result<usize, PlatformError>;
 }
 

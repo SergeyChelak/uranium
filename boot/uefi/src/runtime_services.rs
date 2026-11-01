@@ -45,8 +45,7 @@ impl RuntimeServices {
         self.header.has_signature(SIGNATURE)
     }
 
-    /// Resets or shuts down the platform. The firmware does not return; if
-    /// it does anyway, the processor is parked here instead of running on
+    /// If the firmware returns anyway, the processor is parked here
     pub fn reset_system(&self, kind: ResetKind, status: Status) -> ! {
         // SAFETY: `self` lives in the runtime services table, valid as long as
         // the system table; no reset data is passed, so the size is zero and
@@ -75,7 +74,6 @@ pub(crate) mod testing {
     ) {
     }
 
-    /// A table nothing may be called through, under the given header
     pub(crate) fn table_with_header(header: TableHeader) -> RuntimeServices {
         let mut table = MaybeUninit::<RuntimeServices>::zeroed();
         let place = table.as_mut_ptr();

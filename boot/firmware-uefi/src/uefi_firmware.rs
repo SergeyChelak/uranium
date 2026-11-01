@@ -7,7 +7,6 @@ use uefi::{
 use crate::error::protocol_error;
 use crate::{SerialConsole, TextConsole, UefiMemory, UefiPlatform, UefiVolume, exit};
 
-/// The firmware as the boot sequence sees it, reached through UEFI
 pub struct UefiFirmware<'a> {
     image: Handle,
     system_table: &'a SystemTable,
@@ -25,7 +24,6 @@ impl<'a> UefiFirmware<'a> {
         }
     }
 
-    /// Powers the machine off through the firmware
     pub fn shutdown(self) -> ! {
         self.system_table
             .runtime_services()

@@ -60,7 +60,6 @@ impl Encode for VirtualAddress {
     }
 }
 
-/// Zero on the wire is `None`
 impl Decode for Option<NonZeroU64> {
     fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds> {
         decoder.read().map(NonZeroU64::new)

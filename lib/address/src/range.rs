@@ -2,9 +2,6 @@ use crate::{Frame, Page, PageSize, Size2MiB, Size4KiB};
 
 macro_rules! range_type {
     ($name:ident, $iterator:ident, $page:ident) => {
-        /// `count` consecutive ones from `start`; the one after the last is
-        /// not part of it, and is never named, because above the last one of
-        /// the address space there is none
         #[derive(Clone, Copy, PartialEq, Eq, Debug)]
         pub struct $name<S: PageSize = Size4KiB> {
             start: $page<S>,
@@ -85,9 +82,8 @@ macro_rules! range_type {
 range_type!(PageRange, PageIterator, Page);
 range_type!(FrameRange, FrameIterator, Frame);
 
-/// A large page is the range of the small pages it covers, and a range of
-/// small pages is a large page only when it is exactly that; the large page
-/// lies within the address space, so its range is built without the check
+/// The large page lies within the address space, so its range is built
+/// without the check
 macro_rules! covers {
     ($range:ident, $page:ident, $large:ident, $small:ident) => {
         impl From<$page<$large>> for $range<$small> {

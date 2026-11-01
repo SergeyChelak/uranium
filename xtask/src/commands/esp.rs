@@ -17,7 +17,6 @@ pub fn run(mut arguments: lexopt::Parser) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Copies the built loader and kernel of one platform into its ESP directory
 pub fn populate(workspace: &Workspace, platform: Platform) -> anyhow::Result<()> {
     let esp = Esp::for_platform(&workspace.target_directory, platform);
     place(

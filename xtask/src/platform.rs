@@ -62,8 +62,7 @@ impl Platform {
         }
     }
 
-    /// Prefix of the canonical names of the QEMU machine this platform runs on,
-    /// the form in which firmware descriptors spell their machine patterns
+    /// The form in which firmware descriptors spell their machine patterns
     pub fn qemu_machine_family(self) -> &'static str {
         match self {
             Platform::X86_64 => "pc-q35-",

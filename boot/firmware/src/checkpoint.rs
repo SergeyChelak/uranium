@@ -1,14 +1,12 @@
 use crate::Console;
 
-/// Prints the name of a checkpoint the smoke test waits for; a console
-/// failure here is not worth stopping the boot, the smoke test will time out
+/// A console failure is not worth stopping the boot: the smoke test will
+/// time out instead
 #[cfg(feature = "checkpoints")]
 pub fn checkpoint(console: &mut impl Console, name: &str) {
     let _ = console.write_line(name);
 }
 
-/// Without the `checkpoints` feature the call and the name compile away, so
-/// a regular boot prints only its working output
 #[cfg(not(feature = "checkpoints"))]
 pub fn checkpoint(_console: &mut impl Console, _name: &str) {}
 

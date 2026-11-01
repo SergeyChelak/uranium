@@ -34,8 +34,7 @@ layout!(RawMemoryRegion, RawMemoryRegion::SIZE as usize, {
     padding: 20,
 });
 
-/// How the kernel may use a region of the memory map; the discriminant is
-/// the code that travels in the wire format
+/// The discriminant is the code of the wire format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryKind {
     Usable = 1,
@@ -84,7 +83,6 @@ pub struct MemoryRegion {
     pub kind: MemoryKind,
 }
 
-/// An entry of the memory map held fewer bytes than `RawMemoryRegion`
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EntryTooShort;
 
@@ -100,9 +98,7 @@ impl MemoryRegion {
     }
 }
 
-/// The regions of a table given exactly its bytes, one `RawMemoryRegion`
-/// after another; entries without memory are skipped, an entry too short is
-/// reported in its place
+/// Entries without memory are skipped
 pub(crate) fn regions(
     table: &[u8],
 ) -> impl Iterator<Item = Result<MemoryRegion, EntryTooShort>> + '_ {

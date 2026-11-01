@@ -14,17 +14,13 @@ struct Entry {
     body: Vec<u8>,
 }
 
-/// Builds the bytes of an ELF file for a test: the header, then the program
-/// header table, then the bytes of every entry in order; file offsets are
-/// filled in by `build`, so a test never computes one
+/// File offsets are filled in by `build`, so a test never computes one
 pub(crate) struct Image {
     header: RawHeader,
     entries: Vec<Entry>,
 }
 
 impl Image {
-    /// A 64-bit little-endian executable for x86-64 with its entry at
-    /// `IMAGE_BASE` and no program headers yet
     pub(crate) fn new() -> Self {
         Self {
             header: RawHeader {
@@ -62,7 +58,6 @@ impl Image {
         self
     }
 
-    /// An entry of `kind` whose bytes in the file are `body`
     pub(crate) fn segment(
         self,
         kind: SegmentKind,
@@ -86,7 +81,6 @@ impl Image {
         )
     }
 
-    /// An entry exactly as given, with no bytes of its own
     pub(crate) fn raw(self, raw: RawProgramHeader) -> Self {
         self.entry(raw, Vec::new())
     }

@@ -14,7 +14,7 @@ mod test;
 
 pub type Command = fn(lexopt::Parser) -> anyhow::Result<()>;
 
-/// Everything one can type after `cargo xtask`, in the order usage lists it
+/// In the order usage lists them
 pub const COMMANDS: &[(&str, Command)] = &[
     ("fmt", fmt::run),
     ("clippy", clippy::run),
@@ -29,7 +29,6 @@ pub const COMMANDS: &[(&str, Command)] = &[
     ("test", test::run),
 ];
 
-/// What a composite command passes to a step that takes no options of its own
 fn no_arguments() -> lexopt::Parser {
     lexopt::Parser::from_args(std::iter::empty::<OsString>())
 }

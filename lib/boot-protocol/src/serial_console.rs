@@ -31,8 +31,7 @@ impl From<Option<SerialConsole>> for RawSerialConsole {
     }
 }
 
-/// The chip behind the serial port; the discriminant is the code that
-/// travels in the wire format
+/// The discriminant is the code of the wire format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SerialKind {
     Uart16550 = 1,
@@ -60,8 +59,6 @@ impl TryFrom<u32> for SerialKind {
     }
 }
 
-/// The port the loader found for the kernel's early console; a 16550 is
-/// reached through the x86 I/O port space, a PL011 through memory
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SerialConsole {
     Uart16550 { port: u16 },

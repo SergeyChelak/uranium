@@ -6,9 +6,7 @@ use crate::FirmwareError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryError {
-    /// The firmware has no run of free pages that long
     OutOfMemory,
-    /// The firmware failed the call
     Firmware(FirmwareError),
 }
 
@@ -18,10 +16,8 @@ impl From<FirmwareError> for MemoryError {
     }
 }
 
-/// Pages the firmware gave the loader: their physical base and a view of the
-/// same bytes through the firmware's identity mapping, which lasts until the
-/// handoff. Dropping the value hands the pages back to the firmware, so every
-/// error path frees what it allocated; `leak` keeps them for the kernel
+/// Dropping the value hands the pages back to the firmware; `leak` keeps
+/// them for the kernel
 pub struct Allocation<'a, M: Memory> {
     base: PhysicalAddress,
     bytes: &'static mut [u8],
@@ -49,7 +45,6 @@ impl<'a, M: Memory> Allocation<'a, M> {
         self.bytes
     }
 
-    /// Keeps the pages for the kernel: nothing frees them from now on
     pub fn leak(mut self) -> LeakedMemory {
         LeakedMemory {
             base: self.base,
@@ -57,7 +52,7 @@ impl<'a, M: Memory> Allocation<'a, M> {
         }
     }
 
-    /// Hands the pages back to the firmware now, reporting its answer
+    /// Like dropping, but reports the firmware's answer
     pub fn free(mut self) -> Result<(), MemoryError> {
         let bytes = mem::take(&mut self.bytes);
         self.memory.free(self.base, bytes)
@@ -89,8 +84,7 @@ pub trait Memory {
     where
         Self: Sized;
 
-    /// Returns pages that came from `allocate` to the firmware: their base
-    /// and the whole view of them
+    /// Takes back exactly what `allocate` gave
     fn free(&self, base: PhysicalAddress, bytes: &'static mut [u8]) -> Result<(), MemoryError>;
 
     /// The buffer size the firmware's memory map needs right now, with no
@@ -103,17 +97,11 @@ pub trait Memory {
 /// only in the boot protocol
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryKind {
-    /// Free for the kernel once the loader is gone
     Usable,
-    /// Never to be touched
     Reserved,
-    /// ACPI tables; free once the kernel has read them
     AcpiReclaimable,
-    /// ACPI non-volatile storage; preserved across sleep states
     AcpiNonVolatile,
-    /// Device registers mapped into memory
     MemoryMappedIo,
-    /// Code and data of the firmware's runtime services; preserved
     UefiRuntime,
 }
 
@@ -124,8 +112,6 @@ pub struct MemoryRegion {
     pub kind: MemoryKind,
 }
 
-/// What leaving boot services leaves behind: how much of each buffer was
-/// filled and how the raw map is laid out
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MemoryMapSummary {
     pub region_count: usize,
@@ -146,7 +132,6 @@ mod tests {
     const REFUSAL: MemoryError =
         MemoryError::Firmware(FirmwareError::Status(FirmwareStatus::new(7)));
 
-    /// Counts the pages it has handed out and not yet taken back
     struct Ledger {
         outstanding: Cell<usize>,
         refuses: bool,

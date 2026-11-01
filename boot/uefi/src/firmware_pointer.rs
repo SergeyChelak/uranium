@@ -1,8 +1,5 @@
-//! Typed views of the raw pointers the firmware writes into its tables
-
 use core::ffi::c_void;
 
-/// A pointer the firmware wrote into one of its tables
 #[repr(transparent)]
 pub(crate) struct FirmwarePointer<T>(*const T);
 
@@ -17,23 +14,20 @@ impl<T> FirmwarePointer<T> {
     }
 }
 
-/// What an unused pointer points to. The loader never reads it, so the
-/// pointee stays undeclared until a field is first used
+/// The pointee stays undeclared until a field is first used
 pub(crate) struct Unused {
     _opaque: [u8; 0],
 }
 
 pub(crate) type UnusedFirmwarePointer = FirmwarePointer<Unused>;
 
-/// A table slot whose function the loader does not call yet. It keeps the
-/// offsets of the fields after it right; the slot gets its real signature
-/// when the function is first called
+/// Keeps the offsets of the fields after it right until the function is
+/// first called
 #[repr(transparent)]
 pub(crate) struct UnusedFunctionPointer(*const c_void);
 
 #[cfg(test)]
 impl UnusedFunctionPointer {
-    /// A slot of a fake table the test never calls
     pub(crate) const fn null() -> Self {
         Self(core::ptr::null())
     }
@@ -41,7 +35,6 @@ impl UnusedFunctionPointer {
 
 #[cfg(test)]
 impl<T> FirmwarePointer<T> {
-    /// A slot of a fake table pointing at `pointee`
     pub(crate) fn to(pointee: &T) -> Self {
         Self(pointee)
     }

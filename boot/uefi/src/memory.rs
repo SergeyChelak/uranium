@@ -83,8 +83,6 @@ pub struct MemoryDescriptor {
 }
 
 impl MemoryDescriptor {
-    /// The type of the region, or the code the firmware used when it is not
-    /// a known one
     pub fn memory_type(&self) -> Result<MemoryType, u32> {
         MemoryType::try_from(self.memory_type)
     }
@@ -114,8 +112,6 @@ pub struct MemoryMap<'a> {
 }
 
 impl<'a> MemoryMap<'a> {
-    /// Rejects a descriptor narrower than the declared structure and a map
-    /// that does not hold whole descriptors
     pub(crate) fn new(
         bytes: &'a [u8],
         descriptor_size: usize,

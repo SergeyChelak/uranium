@@ -1,9 +1,3 @@
-//! Readers for the ACPI tables the loader follows: the root pointer, the
-//! extended system description table and the serial port console redirection
-//! table. Every parser works on bytes the caller took out of firmware memory,
-//! and the lookup follows addresses only through a `TableReader` the caller
-//! provides, so nothing here touches memory or assumes alignment.
-
 #![no_std]
 
 #[cfg(test)]
@@ -25,9 +19,7 @@ pub use xsdt::Xsdt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AcpiError {
-    /// The bytes do not start with the signature of the expected table
     Signature,
-    /// The bytes the table claims do not sum to zero
     Checksum,
     /// The table revision predates a field the loader needs
     Revision,
@@ -35,7 +27,6 @@ pub enum AcpiError {
     Length,
     /// The address does not point at readable firmware memory
     Address,
-    /// No table in the XSDT carries the requested signature
     NotFound,
 }
 

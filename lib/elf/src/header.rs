@@ -76,8 +76,6 @@ const DATA_LITTLE_ENDIAN: u8 = 1;
 pub(crate) const CURRENT_VERSION: u32 = 1;
 
 impl RawIdentification {
-    /// Whether this crate can read the file: ELF, 64-bit, little-endian, of
-    /// the current version
     pub(crate) fn check(&self) -> Result<(), ElfError> {
         if self.magic != MAGIC {
             return Err(ElfError::NotElf);
@@ -95,9 +93,8 @@ impl RawIdentification {
     }
 }
 
-/// The `e_type` code: what kind of object the file is. The specification
-/// leaves ranges to operating systems and processors, so any code is a
-/// value here and the named ones are those the base document defines
+/// The `e_type` code; any code is a value, because the specification leaves
+/// ranges to operating systems and processors
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FileType(u16);
 
@@ -114,8 +111,7 @@ impl FileType {
     }
 }
 
-/// The `e_machine` code: the processor the file is built for. Only the two
-/// Uranium runs on are named; any other code is still a value
+/// The `e_machine` code; only the two processors Uranium runs on are named
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Machine(u16);
 
@@ -130,7 +126,6 @@ impl Machine {
     }
 }
 
-/// What the file header says about the file as a whole
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Header {
     pub file_type: FileType,

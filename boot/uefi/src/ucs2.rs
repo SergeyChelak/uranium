@@ -7,10 +7,8 @@ const CARRIAGE_RETURN: u16 = b'\r' as u16;
 const LINE_FEED: u16 = b'\n' as u16;
 const REPLACEMENT: u16 = b'?' as u16;
 
-/// Turns text into null-terminated UCS-2 chunks for the text console:
-/// a line feed becomes carriage return plus line feed unless the carriage
-/// return is already there, and characters outside the basic plane, which
-/// UCS-2 cannot represent, become a question mark
+/// A bare line feed becomes carriage return plus line feed; a character
+/// outside the basic plane becomes a question mark
 pub(crate) struct Encoder<'a> {
     text: Chars<'a>,
     pending: Option<u16>,
@@ -26,9 +24,8 @@ impl<'a> Encoder<'a> {
         }
     }
 
-    /// Fills `buffer` with the next chunk and a terminating zero. Returns the
-    /// number of code units before the terminator, or `None` once the text
-    /// is exhausted
+    /// The number of code units before the terminator; `None` once the text is
+    /// exhausted
     pub(crate) fn next_chunk(&mut self, buffer: &mut [u16; CHUNK_LENGTH + 1]) -> Option<usize> {
         let mut length = 0;
         while length < CHUNK_LENGTH {
@@ -56,9 +53,8 @@ impl<'a> Encoder<'a> {
     }
 }
 
-/// Writes `text` with a terminating zero into `buffer`, the way the firmware
-/// takes file names: no line-ending rules and no replacements. `None` when a
-/// character lies outside the basic plane or the text does not fit
+/// No line-ending rules and no replacements; `None` when a character lies
+/// outside the basic plane or the text does not fit
 pub(crate) fn encode_terminated<'a>(text: &str, buffer: &'a mut [u16]) -> Option<&'a [u16]> {
     let mut length = 0;
     for character in text.chars() {
@@ -69,8 +65,7 @@ pub(crate) fn encode_terminated<'a>(text: &str, buffer: &'a mut [u16]) -> Option
     Some(&buffer[..=length])
 }
 
-/// Little-endian UCS-2 up to the first zero unit, written as UTF-8; the
-/// number of bytes written, or `None` when the text does not fit
+/// Up to the first zero unit; `None` when the UTF-8 does not fit `buffer`
 pub fn decode_terminated(bytes: &[u8], buffer: &mut [u8]) -> Option<usize> {
     let (pairs, _odd_trailing_byte) = bytes.as_chunks::<2>();
     let mut length = 0;

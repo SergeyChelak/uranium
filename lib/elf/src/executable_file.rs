@@ -4,17 +4,11 @@ use crate::{ElfError, ElfFile, FileType, Machine, Segment, SegmentKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecutableError<E> {
-    /// Not a well-formed ELF file
     Elf(ElfError),
-    /// Not an executable file; carries the type the file claims
     NotExecutable(FileType),
-    /// Built for another processor; carries the one the file names
     WrongMachine(Machine),
-    /// Two loadable segments claim the same memory
     SegmentsOverlap,
-    /// The entry point lies in no loadable segment
     EntryOutsideSegments,
-    /// The caller's placement rule refused a segment
     Placement(E),
 }
 
@@ -26,10 +20,7 @@ impl<E> From<ElfError> for ExecutableError<E> {
 
 /// An ELF file checked as an executable for one processor: every loadable
 /// segment passed the caller's placement rule, no two of them overlap, and
-/// the entry point lies in one of them. What the check learned on the way,
-/// the lowest address, the interpreter and the presence of a dynamic
-/// linking table, is kept; the segments themselves are read from the file
-/// again whenever asked for, as the program header table already holds them
+/// the entry point lies in one of them
 #[derive(Clone, Copy)]
 pub struct ExecutableFile<'a> {
     file: ElfFile<'a>,
@@ -39,12 +30,9 @@ pub struct ExecutableFile<'a> {
 }
 
 impl<'a> ExecutableFile<'a> {
-    /// Checks `file` as an executable for `machine`. `placement` is the
-    /// caller's rule for where a loadable segment may lie, and its error
-    /// comes back as `Placement`. A loadable segment of no memory is left
-    /// out of every check and every listing: there is nothing to load or
-    /// map. An interpreter or a dynamic linking table is reported, not
-    /// refused: whether the caller can honour them is the caller's decision
+    /// A loadable segment of no memory is left out of every check and every
+    /// listing; an interpreter or a dynamic linking table is reported, not
+    /// refused
     pub fn new<E>(
         file: ElfFile<'a>,
         machine: Machine,
@@ -99,9 +87,7 @@ impl<'a> ExecutableFile<'a> {
         self.virtual_base
     }
 
-    /// The loadable segments that occupy memory, in file order, read from
-    /// the file again; an entry that fails to read is reported in its place,
-    /// as `ElfFile::segments` reports it
+    /// The loadable segments that occupy memory, in file order
     pub fn segments(&self) -> impl Iterator<Item = Result<Segment<'a>, ElfError>> + use<'a> {
         self.file.segments().filter_map(|segment| {
             segment
@@ -110,25 +96,20 @@ impl<'a> ExecutableFile<'a> {
         })
     }
 
-    /// The path of the program interpreter, as the file holds it with its
-    /// terminating zero, when the file asks for one
+    /// As the file holds it, with its terminating zero
     pub fn interpreter(&self) -> Option<&'a [u8]> {
         self.interpreter
     }
 
-    /// Whether the file carries a dynamic linking table
     pub fn is_dynamic(&self) -> bool {
         self.dynamic
     }
 }
 
-/// Whether an entry is a loadable segment with memory to load into
 fn loads_memory(segment: &Segment<'_>) -> bool {
     segment.kind() == SegmentKind::LOAD && segment.memory_size() != 0
 }
 
-/// Whether `segment`, the entry at `index`, shares memory with a loadable
-/// segment before it in the table
 fn overlaps_an_earlier_segment(
     file: &ElfFile<'_>,
     index: usize,
@@ -154,8 +135,6 @@ mod tests {
     use crate::program_header::{EXECUTE, READ, WRITE};
     use crate::testing::{IMAGE_BASE, Image};
 
-    /// The three segments the kernel's linker script lays out: code,
-    /// constants, and data with a zeroed tail, with the entry in the code
     fn kernel() -> Image {
         Image::new()
             .header(|header| header.entry = VirtualAddress::new(IMAGE_BASE + 0x10))

@@ -100,7 +100,6 @@ impl Table {
         self.entry_size
     }
 
-    /// The bytes the entries occupy
     pub fn size(self) -> u64 {
         self.count * self.entry_size
     }

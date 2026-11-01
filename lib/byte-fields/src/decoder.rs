@@ -1,12 +1,10 @@
 use crate::{Fields, OutOfBounds};
 
-/// A type that is read from a run of consecutive fields
 pub trait Decode: Sized {
     fn decode(decoder: &mut Decoder<'_>) -> Result<Self, OutOfBounds>;
 }
 
-/// Reads fields one after another; a field that does not fit leaves the
-/// position where it was
+/// A field that does not fit leaves the position where it was
 pub struct Decoder<'a> {
     fields: Fields<'a>,
     position: usize,
@@ -31,7 +29,6 @@ impl<'a> Decoder<'a> {
         Ok(array)
     }
 
-    /// The next `length` bytes as they lie
     pub fn bytes(&mut self, length: usize) -> Result<&'a [u8], OutOfBounds> {
         let end = self.position.checked_add(length).ok_or(OutOfBounds)?;
         let bytes = self

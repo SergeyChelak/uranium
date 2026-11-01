@@ -7,7 +7,6 @@ macro_rules! page_type {
         }
 
         impl<S: $crate::PageSize> $name<S> {
-            /// The one that holds `address`
             pub fn containing(address: $crate::$address) -> Self {
                 Self {
                     number: address.as_u64() / S::SIZE,
@@ -15,7 +14,6 @@ macro_rules! page_type {
                 }
             }
 
-            /// `None` unless `address` is the first byte of one
             pub fn from_start(address: $crate::$address) -> Option<Self> {
                 address
                     .is_aligned(S::SIZE)

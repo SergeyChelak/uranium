@@ -1,6 +1,5 @@
 use crate::{Decoder, OutOfBounds};
 
-/// The bytes of one structure, read field by field at known offsets
 #[derive(Clone, Copy)]
 pub struct Fields<'a>(&'a [u8]);
 
@@ -9,7 +8,6 @@ impl<'a> Fields<'a> {
         Self(bytes)
     }
 
-    /// The first `length` bytes, or `OutOfBounds` when there are fewer
     pub fn exactly(bytes: &'a [u8], length: usize) -> Result<Self, OutOfBounds> {
         bytes.get(..length).map(Self).ok_or(OutOfBounds)
     }
@@ -37,13 +35,10 @@ impl<'a> Fields<'a> {
             .ok_or(OutOfBounds)
     }
 
-    /// Everything from `offset` to the end
     pub fn tail(self, offset: usize) -> Result<&'a [u8], OutOfBounds> {
         self.0.get(offset..).ok_or(OutOfBounds)
     }
 
-    /// The `length` bytes from `offset`, both as a file format states them,
-    /// or `OutOfBounds` when they reach past the end
     pub fn window(self, offset: u64, length: u64) -> Result<Self, OutOfBounds> {
         let start = usize::try_from(offset).map_err(|_| OutOfBounds)?;
         let end = usize::try_from(length)
@@ -61,7 +56,6 @@ impl<'a> Fields<'a> {
         self.0
     }
 
-    /// A cursor that starts reading at `offset`
     pub fn at(self, offset: usize) -> Decoder<'a> {
         Decoder::over(self, offset)
     }

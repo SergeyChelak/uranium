@@ -9,7 +9,6 @@ pub(crate) struct TableHeader {
 }
 
 impl TableHeader {
-    /// Whether the table that follows is of the kind `expected` names
     pub(crate) fn has_signature(&self, expected: u64) -> bool {
         self.signature == expected
     }
@@ -17,7 +16,6 @@ impl TableHeader {
 
 #[cfg(test)]
 impl TableHeader {
-    /// The header of a fake table; every other field stays zero
     pub(crate) const fn with_signature(signature: u64) -> Self {
         Self {
             signature,

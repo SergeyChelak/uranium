@@ -18,13 +18,10 @@ pub fn run(mut arguments: lexopt::Parser) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Boots the platform's ESP directory in QEMU with the serial port on this terminal
 pub fn start(workspace: &Workspace, platform: Platform) -> anyhow::Result<()> {
     cargo::run(&mut command_for(workspace, platform)?)
 }
 
-/// The QEMU command line for the platform: its ESP directory, the firmware found on this
-/// machine and the variable store prepared for it
 pub fn command_for(workspace: &Workspace, platform: Platform) -> anyhow::Result<Command> {
     let esp = Esp::for_platform(&workspace.target_directory, platform);
     if !esp.loader_path().exists() {

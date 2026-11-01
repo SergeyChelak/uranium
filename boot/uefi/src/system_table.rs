@@ -10,7 +10,6 @@ use crate::{BootServices, Guid, Handle, RuntimeServices, SimpleTextOutputProtoco
 // UEFI 2.11, 4.3.1
 const SIGNATURE: u64 = 0x5453_5953_2049_4249;
 
-/// Which of the firmware's tables did not carry the signature of its kind
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UnexpectedSignature {
     /// The pointer passed to the entry point is null or leads elsewhere
@@ -21,9 +20,7 @@ pub enum UnexpectedSignature {
     RuntimeServices,
 }
 
-/// The table the firmware hands to `efi_main`. A `&SystemTable` may exist
-/// only while that pointer is valid: it was created from the pointer the
-/// firmware passed, and boot services have not been exited
+/// A `&SystemTable` exists only while boot services run
 // UEFI 2.11, 4.3.1
 #[repr(C)]
 pub struct SystemTable {
@@ -43,9 +40,6 @@ pub struct SystemTable {
 }
 
 impl SystemTable {
-    /// Takes the pointer the firmware passed to the entry point as the system
-    /// table, once its signature and those of both services tables match
-    ///
     /// # Safety
     ///
     /// `pointer` must be what the firmware passed to `efi_main`, or null, and
@@ -73,7 +67,6 @@ impl SystemTable {
         Ok(table)
     }
 
-    /// The active console, or `None` when the firmware has none
     pub fn console_out(&self) -> Option<&SimpleTextOutputProtocol> {
         // SAFETY: a `&SystemTable` exists only while the system table is valid,
         // so the console protocol it points to is valid as well
@@ -94,8 +87,7 @@ impl SystemTable {
             .expect("the firmware provides the runtime services table")
     }
 
-    /// The physical address of the table the firmware installed under `guid`;
-    /// these addresses are physical and are never fixed up
+    /// Physical, never fixed up
     pub fn configuration_table_address(&self, guid: Guid) -> Option<PhysicalAddress> {
         self.configuration_tables()
             .iter()
@@ -136,7 +128,6 @@ mod tests {
     const BOOT_SERVICES_SIGNATURE: u64 = 0x5652_4553_544f_4f42;
     const RUNTIME_SERVICES_SIGNATURE: u64 = 0x5652_4553_544e_5552;
 
-    /// The three tables of a fake firmware, each under the given signature
     struct Tables {
         boot_services: BootServices,
         runtime_services: RuntimeServices,

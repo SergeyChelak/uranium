@@ -35,8 +35,6 @@ pub(crate) struct FileInformation {
     pub(crate) attribute: u64,
 }
 
-/// What `GetInfo` fills: the fixed part and a name of up to `NAME_CAPACITY`
-/// code units with its terminator
 #[repr(C)]
 pub(crate) struct FileInformationBuffer {
     pub(crate) information: FileInformation,

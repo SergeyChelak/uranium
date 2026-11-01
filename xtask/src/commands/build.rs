@@ -15,7 +15,6 @@ pub fn run(mut arguments: lexopt::Parser) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Builds the kernel and the loader of one platform
 pub fn for_platform(workspace: &Workspace, platform: Platform) -> anyhow::Result<()> {
     let target = &workspace.target_directory;
     build(

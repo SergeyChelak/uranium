@@ -1,12 +1,11 @@
 use crate::OutOfBounds;
 
-/// A type that is written as a run of consecutive fields
 pub trait Encode {
     fn encode(&self, encoder: &mut Encoder<'_>) -> Result<(), OutOfBounds>;
 }
 
-/// Writes fields one after another; a field that does not fit leaves the
-/// position and the bytes where they were
+/// A field that does not fit leaves the position and the bytes where they
+/// were
 pub struct Encoder<'a> {
     bytes: &'a mut [u8],
     position: usize,

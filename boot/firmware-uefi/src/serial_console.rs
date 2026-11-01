@@ -24,8 +24,6 @@ impl Console for SerialConsole<'_> {
     }
 }
 
-/// Feeds the text to `write` piece by piece, turning every bare line feed
-/// into carriage return plus line feed, which is what a terminal expects
 fn with_line_endings(
     text: &str,
     mut write: impl FnMut(&[u8]) -> Result<(), ConsoleError>,
@@ -44,8 +42,7 @@ fn with_line_endings(
     Ok(())
 }
 
-/// Repeats `write` until the device has taken every byte; no progress is
-/// an error, so a stuck port cannot hang the caller
+/// No progress is an error, so a stuck port cannot hang the caller
 fn write_all(
     mut bytes: &[u8],
     mut write: impl FnMut(&[u8]) -> Result<usize, Status>,

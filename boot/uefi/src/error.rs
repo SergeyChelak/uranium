@@ -1,11 +1,8 @@
 use crate::Status;
 
-/// Why the firmware did not hand back a protocol instance
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProtocolError {
-    /// The firmware answered with an error status
     Firmware(Status),
-    /// The firmware reported success but handed back a null pointer
     NullPointer,
 }
 
@@ -15,8 +12,6 @@ impl From<Status> for ProtocolError {
     }
 }
 
-/// Why `File::open` failed: the path never reached the firmware, or the
-/// firmware did not hand back the file
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpenError {
     /// The path has more UCS-2 code units than `File::open` holds, or a
@@ -37,11 +32,8 @@ impl From<Status> for OpenError {
     }
 }
 
-/// Why `get_memory_map` gave no map
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemoryMapError {
-    /// The firmware answered with an error status; `BUFFER_TOO_SMALL` names
-    /// a buffer shorter than the map
     Firmware(Status),
     /// The map contradicts its own description: a descriptor narrower than
     /// the declared structure, a length that is not whole descriptors, or

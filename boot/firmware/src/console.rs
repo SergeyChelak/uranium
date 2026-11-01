@@ -2,9 +2,7 @@ use crate::FirmwareError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConsoleError {
-    /// The firmware offers no such console on this machine
     Unavailable,
-    /// The console exists but writing to it failed
     Firmware(FirmwareError),
 }
 
@@ -14,7 +12,6 @@ impl From<FirmwareError> for ConsoleError {
     }
 }
 
-/// Text output the boot sequence can rely on without knowing the firmware
 pub trait Console {
     fn write_str(&mut self, text: &str) -> Result<(), ConsoleError>;
 

@@ -7,7 +7,6 @@ const SIGNATURE_OFFSET: usize = 0;
 const LENGTH_OFFSET: usize = 4;
 const REVISION_OFFSET: usize = 8;
 
-/// The header every system description table starts with
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TableHeader {
     pub signature: [u8; 4],
@@ -51,7 +50,6 @@ impl TableHeader {
     }
 }
 
-/// Every byte of a table, its checksum included, adds up to zero
 pub(crate) fn sums_to_zero(bytes: &[u8]) -> bool {
     bytes.iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte)) == 0
 }
@@ -63,7 +61,6 @@ pub(crate) mod testing {
 
     use crate::TableHeader;
 
-    /// Sets the byte at `checksum_offset` so that all of `bytes` sum to zero
     pub(crate) fn with_checksum(mut bytes: Vec<u8>, checksum_offset: usize) -> Vec<u8> {
         bytes[checksum_offset] = 0;
         let sum = bytes.iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte));
@@ -71,8 +68,6 @@ pub(crate) mod testing {
         bytes
     }
 
-    /// A table with a valid header: the signature, the length over everything,
-    /// the revision and the checksum; the vendor fields stay zero
     pub(crate) fn table(signature: &[u8; 4], revision: u8, body: &[u8]) -> Vec<u8> {
         let mut bytes = vec![0u8; TableHeader::LENGTH];
         bytes[..4].copy_from_slice(signature);

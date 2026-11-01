@@ -2,7 +2,6 @@ use std::path::{Path, PathBuf};
 
 use crate::platform::Platform;
 
-/// The EFI system partition as a directory, laid out as `boot_protocol.md` requires
 pub struct Esp {
     platform: Platform,
     root: PathBuf,
