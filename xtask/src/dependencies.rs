@@ -381,219 +381,65 @@ mod tests {
         assert!(error.to_string().contains("ghost"));
     }
 
-    const MODULE_MAP: &[(&str, &str, &[&str])] = &[
-        ("address", "lib", &[]),
-        ("boot-protocol", "lib", &["address"]),
-        ("user-abi", "lib", &[]),
-        ("elf", "lib", &["address"]),
-        ("hal", "hal/contract", &["address"]),
-        (
-            "hal-x86_64",
-            "hal/implementation",
-            &["hal", "address", "boot-protocol"],
-        ),
-        (
-            "hal-aarch64",
-            "hal/implementation",
-            &["hal", "address", "boot-protocol"],
-        ),
-        ("sync", "kernel/foundation", &["hal"]),
-        ("collections", "kernel/foundation", &[]),
-        ("frames", "kernel/foundation", &["address", "sync"]),
-        (
-            "frames-buddy",
-            "kernel/implementation",
-            &["frames", "address", "collections"],
-        ),
-        ("heap", "kernel/foundation", &["frames", "sync"]),
-        ("heap-slab", "kernel/implementation", &["heap", "frames"]),
-        (
-            "virtual-memory",
-            "kernel/foundation",
-            &["hal", "frames", "address", "sync"],
-        ),
-        (
-            "trap",
-            "kernel/interface",
-            &["hal", "virtual-memory", "sync", "collections"],
-        ),
-        (
-            "time",
-            "kernel/interface",
-            &["hal", "trap", "sync", "collections"],
-        ),
-        (
-            "task",
-            "kernel/interface",
-            &["hal", "virtual-memory", "frames", "sync", "collections"],
-        ),
-        ("scheduler", "kernel/interface", &["task"]),
-        (
-            "scheduler-round-robin",
-            "kernel/implementation",
-            &["scheduler", "task", "collections"],
-        ),
-        (
-            "process",
-            "kernel/interface",
-            &[
-                "task",
-                "scheduler",
-                "virtual-memory",
-                "vfs",
-                "ipc",
-                "elf",
-                "user-abi",
-            ],
-        ),
-        (
-            "syscall",
-            "kernel/interface",
-            &[
-                "user-abi",
-                "process",
-                "vfs",
-                "ipc",
-                "time",
-                "virtual-memory",
-            ],
-        ),
-        (
-            "ipc",
-            "kernel/interface",
-            &["task", "virtual-memory", "user-abi"],
-        ),
-        ("vfs", "kernel/interface", &["sync", "user-abi", "block"]),
-        ("fs-tmpfs", "kernel/implementation", &["vfs"]),
-        ("fs-devfs", "kernel/implementation", &["vfs", "device"]),
-        ("fs-fat", "kernel/implementation", &["vfs", "block"]),
-        ("fs-procfs", "kernel/implementation", &["vfs", "process"]),
-        ("block", "kernel/interface", &["sync", "collections"]),
-        (
-            "device",
-            "kernel/interface",
-            &["hal", "trap", "virtual-memory", "sync"],
-        ),
-        ("serial-16550", "kernel/implementation", &["device", "tty"]),
-        ("pci", "kernel/interface", &["device", "hal"]),
-        ("acpi", "kernel/interface", &["address"]),
-        ("device-tree", "kernel/interface", &["address"]),
-        (
-            "virtio-blk",
-            "kernel/implementation",
-            &["device", "pci", "block"],
-        ),
-        (
-            "virtio-net",
-            "kernel/implementation",
-            &["device", "pci", "network"],
-        ),
-        ("ps2", "kernel/implementation", &["device", "tty"]),
-        ("framebuffer", "kernel/implementation", &["device", "tty"]),
-        ("tty", "kernel/interface", &["vfs", "ipc", "log", "sync"]),
-        ("log", "kernel/interface", &["hal", "sync"]),
-        ("network", "kernel/interface", &["device", "ipc", "time"]),
-        (
-            "kernel",
-            "kernel/root",
-            &[
-                "address",
-                "boot-protocol",
-                "user-abi",
-                "elf",
-                "hal",
-                "hal-x86_64",
-                "hal-aarch64",
-                "sync",
-                "collections",
-                "frames",
-                "frames-buddy",
-                "heap",
-                "heap-slab",
-                "virtual-memory",
-                "trap",
-                "time",
-                "task",
-                "scheduler",
-                "scheduler-round-robin",
-                "process",
-                "syscall",
-                "ipc",
-                "vfs",
-                "fs-tmpfs",
-                "fs-devfs",
-                "fs-fat",
-                "block",
-                "device",
-                "serial-16550",
-                "pci",
-                "acpi",
-                "device-tree",
-                "virtio-blk",
-                "ps2",
-                "framebuffer",
-                "tty",
-                "log",
-            ],
-        ),
-        ("boot-config", "boot/interface", &[]),
-        ("firmware", "boot/interface", &["address"]),
-        (
-            "firmware-uefi",
-            "boot/implementation",
-            &["firmware", "uefi", "address"],
-        ),
-        ("uefi", "boot/bindings", &[]),
-        ("handoff", "boot/interface", &["address", "boot-protocol"]),
-        (
-            "handoff-x86_64",
-            "boot/implementation",
-            &["handoff", "hal-x86_64", "boot-protocol", "address"],
-        ),
-        (
-            "handoff-aarch64",
-            "boot/implementation",
-            &["handoff", "hal-aarch64", "boot-protocol", "address"],
-        ),
-        (
-            "boot-sequence",
-            "boot/interface",
-            &[
-                "boot-config",
-                "firmware",
-                "handoff",
-                "boot-protocol",
-                "elf",
-                "address",
-            ],
-        ),
-        (
-            "loader",
-            "boot/root",
-            &[
-                "boot-sequence",
-                "firmware-uefi",
-                "handoff-x86_64",
-                "handoff-aarch64",
-                "uefi",
-                "boot-protocol",
-                "address",
-            ],
-        ),
-        ("user-runtime", "user/runtime", &["user-abi"]),
-        ("init", "user/program", &["user-runtime"]),
-        ("sh", "user/program", &["user-runtime"]),
-        ("cat", "user/program", &["user-runtime"]),
-        ("xtask", "tooling", &["cargo_metadata", "lexopt", "anyhow"]),
-    ];
+    #[test]
+    fn interface_never_depends_on_an_implementation() {
+        let found = messages(vec![
+            package("frames-buddy", "kernel/implementation", &[]),
+            package("process", "kernel/interface", &["frames-buddy"]),
+        ]);
+        assert_eq!(
+            found,
+            [
+                "Dependency violation: process depends on frames-buddy, but a kernel/interface crate may depend only on lib, hal/contract, kernel/foundation and kernel/interface crates"
+            ]
+        );
+    }
 
     #[test]
-    fn module_map_graph_passes() {
-        let mut packages: Vec<Package> = MODULE_MAP
-            .iter()
-            .map(|(name, layer, dependencies)| package(name, layer, dependencies))
-            .collect();
-        packages.extend(["cargo_metadata", "lexopt", "anyhow"].map(foreign));
-        assert_eq!(messages(packages), Vec::<String>::new());
+    fn hal_implementation_knows_no_kernel() {
+        let found = messages(vec![
+            package("sync", "kernel/foundation", &[]),
+            package("hal-x86_64", "hal/implementation", &["sync"]),
+        ]);
+        assert_eq!(
+            found,
+            [
+                "Dependency violation: hal-x86_64 depends on sync, but a hal/implementation crate may depend only on lib and hal/contract crates"
+            ]
+        );
+    }
+
+    #[test]
+    fn kernel_root_names_the_implementations() {
+        let found = messages(vec![
+            package("frames-buddy", "kernel/implementation", &[]),
+            package("hal-x86_64", "hal/implementation", &[]),
+            package("kernel", "kernel/root", &["frames-buddy", "hal-x86_64"]),
+        ]);
+        assert!(found.is_empty());
+    }
+
+    #[test]
+    fn handoff_builds_on_the_hal_implementation() {
+        let found = messages(vec![
+            package("hal-x86_64", "hal/implementation", &[]),
+            package("handoff-x86_64", "boot/implementation", &["hal-x86_64"]),
+        ]);
+        assert!(found.is_empty());
+    }
+
+    #[test]
+    fn user_program_sees_only_its_runtime() {
+        let found = messages(vec![
+            package("user-runtime", "user/runtime", &[]),
+            package("syscall", "kernel/interface", &[]),
+            package("init", "user/program", &["user-runtime", "syscall"]),
+        ]);
+        assert_eq!(
+            found,
+            [
+                "Dependency violation: init depends on syscall, but a user/program crate may depend only on lib and user/runtime crates"
+            ]
+        );
     }
 }
