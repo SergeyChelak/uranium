@@ -23,17 +23,17 @@ impl<'a> UefiPlatform<'a> {
 }
 
 impl Platform for UefiPlatform<'_> {
-    fn system_table(&self) -> PhysicalAddress {
+    fn system_table_address(&self) -> PhysicalAddress {
         PhysicalAddress::new(VirtualAddress::from_pointer(self.system_table).as_u64())
     }
 
-    fn rsdp(&self) -> Option<PhysicalAddress> {
+    fn rsdp_address(&self) -> Option<PhysicalAddress> {
         self.system_table
-            .find_configuration_table(ACPI_20_TABLE_GUID)
+            .configuration_table_address(ACPI_20_TABLE_GUID)
     }
 
     fn spcr(&self) -> Result<Spcr, PlatformError> {
-        let rsdp = self.rsdp().ok_or(PlatformError::MissingTable)?;
+        let rsdp = self.rsdp_address().ok_or(PlatformError::MissingTable)?;
         let tables = FirmwareTables::until_exit(self.system_table);
         Ok(Spcr::find(&tables, rsdp)?)
     }

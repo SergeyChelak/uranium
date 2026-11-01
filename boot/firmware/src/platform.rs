@@ -34,10 +34,10 @@ impl From<AcpiError> for PlatformError {
 /// and memory
 pub trait Platform {
     /// The firmware's system table, handed on to the kernel
-    fn system_table(&self) -> PhysicalAddress;
+    fn system_table_address(&self) -> PhysicalAddress;
 
     /// The root of the ACPI tables, when the firmware installed one
-    fn rsdp(&self) -> Option<PhysicalAddress>;
+    fn rsdp_address(&self) -> Option<PhysicalAddress>;
 
     /// The serial port console redirection table, parsed and verified
     fn spcr(&self) -> Result<Spcr, PlatformError>;

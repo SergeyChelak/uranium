@@ -193,13 +193,13 @@ impl<'a> BootInformation<'a> {
         }
     }
 
-    pub fn uefi_system_table(&self) -> Option<PhysicalAddress> {
+    pub fn uefi_system_table_address(&self) -> Option<PhysicalAddress> {
         self.raw
             .uefi_system_table
             .map(|address| PhysicalAddress::new(address.get()))
     }
 
-    pub fn rsdp(&self) -> Option<PhysicalAddress> {
+    pub fn rsdp_address(&self) -> Option<PhysicalAddress> {
         self.raw
             .rsdp
             .map(|address| PhysicalAddress::new(address.get()))
@@ -598,10 +598,13 @@ mod tests {
             }
         );
         assert_eq!(
-            information.uefi_system_table(),
+            information.uefi_system_table_address(),
             Some(PhysicalAddress::new(0x7f00_0000))
         );
-        assert_eq!(information.rsdp(), Some(PhysicalAddress::new(0x7e00_0000)));
+        assert_eq!(
+            information.rsdp_address(),
+            Some(PhysicalAddress::new(0x7e00_0000))
+        );
         assert_eq!(information.command_line(), Some(physical(0x50_2000, 16)));
     }
 
@@ -612,8 +615,8 @@ mod tests {
         raw.rsdp = None;
         raw.command_line = range(0x50_2000, 0);
         let information = decode(&raw).unwrap();
-        assert_eq!(information.uefi_system_table(), None);
-        assert_eq!(information.rsdp(), None);
+        assert_eq!(information.uefi_system_table_address(), None);
+        assert_eq!(information.rsdp_address(), None);
         assert_eq!(information.device_tree(), None);
         assert_eq!(information.framebuffer(), None);
         assert_eq!(information.command_line(), None);

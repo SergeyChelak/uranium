@@ -96,7 +96,7 @@ impl SystemTable {
 
     /// The physical address of the table the firmware installed under `guid`;
     /// these addresses are physical and are never fixed up
-    pub fn find_configuration_table(&self, guid: Guid) -> Option<PhysicalAddress> {
+    pub fn configuration_table_address(&self, guid: Guid) -> Option<PhysicalAddress> {
         self.configuration_tables()
             .iter()
             .find(|entry| entry.vendor_guid == guid)
@@ -238,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn find_configuration_table_matches_by_guid() {
+    fn configuration_table_address_matches_by_guid() {
         let entries = [
             ConfigurationTable {
                 vendor_guid: Guid::new(1, 2, 3, [4; 8]),
@@ -251,11 +251,11 @@ mod tests {
         ];
         let table = system_table_with(&entries);
         assert_eq!(
-            table.find_configuration_table(ACPI_20_TABLE_GUID),
+            table.configuration_table_address(ACPI_20_TABLE_GUID),
             Some(PhysicalAddress::new(0x2000))
         );
         assert_eq!(
-            table.find_configuration_table(Guid::new(9, 9, 9, [9; 8])),
+            table.configuration_table_address(Guid::new(9, 9, 9, [9; 8])),
             None
         );
     }
@@ -265,7 +265,7 @@ mod tests {
         assert!(zeroed_system_table().configuration_tables().is_empty());
         assert!(system_table_with(&[]).configuration_tables().is_empty());
         assert_eq!(
-            system_table_with(&[]).find_configuration_table(ACPI_20_TABLE_GUID),
+            system_table_with(&[]).configuration_table_address(ACPI_20_TABLE_GUID),
             None
         );
     }

@@ -100,7 +100,7 @@ impl<'a> BootInformationBuilder<'a> {
     }
 
     /// Address zero means no table, the same as `None`
-    pub fn uefi_system_table(self, address: Option<PhysicalAddress>) -> Self {
+    pub fn uefi_system_table_address(self, address: Option<PhysicalAddress>) -> Self {
         Self {
             uefi_system_table: address,
             ..self
@@ -108,7 +108,7 @@ impl<'a> BootInformationBuilder<'a> {
     }
 
     /// Address zero means no table, the same as `None`
-    pub fn rsdp(self, address: Option<PhysicalAddress>) -> Self {
+    pub fn rsdp_address(self, address: Option<PhysicalAddress>) -> Self {
         Self {
             rsdp: address,
             ..self
@@ -267,8 +267,8 @@ mod tests {
         let regions = regions();
         let mut block = vec![0u8; 0x1000];
         let structure = complete(&regions)
-            .uefi_system_table(Some(PhysicalAddress::new(0x7f00_0000)))
-            .rsdp(Some(PhysicalAddress::new(0x7e00_0000)))
+            .uefi_system_table_address(Some(PhysicalAddress::new(0x7f00_0000)))
+            .rsdp_address(Some(PhysicalAddress::new(0x7e00_0000)))
             .serial_console(Some(SerialConsole::Pl011 {
                 base: PhysicalAddress::new(0x0900_0000),
             }))
@@ -293,10 +293,13 @@ mod tests {
         assert_eq!(information.loader_data(), physical(0x5000_0000, 0x4000));
         assert_eq!(information.uefi_memory_map(), uefi_memory_map());
         assert_eq!(
-            information.uefi_system_table(),
+            information.uefi_system_table_address(),
             Some(PhysicalAddress::new(0x7f00_0000))
         );
-        assert_eq!(information.rsdp(), Some(PhysicalAddress::new(0x7e00_0000)));
+        assert_eq!(
+            information.rsdp_address(),
+            Some(PhysicalAddress::new(0x7e00_0000))
+        );
         assert_eq!(
             information.serial_console(),
             Some(SerialConsole::Pl011 {
@@ -333,8 +336,8 @@ mod tests {
             .unwrap();
         let raw = RawBootInformation::read_from(&block).unwrap();
         let information = BootInformation::decode::<TestLayout>(&raw).unwrap();
-        assert_eq!(information.uefi_system_table(), None);
-        assert_eq!(information.rsdp(), None);
+        assert_eq!(information.uefi_system_table_address(), None);
+        assert_eq!(information.rsdp_address(), None);
         assert_eq!(information.serial_console(), None);
         assert_eq!(information.command_line(), None);
         assert_eq!(information.device_tree(), None);
@@ -363,12 +366,12 @@ mod tests {
         let regions = regions();
         let mut block = vec![0u8; 0x1000];
         complete(&regions)
-            .rsdp(Some(PhysicalAddress::new(0)))
+            .rsdp_address(Some(PhysicalAddress::new(0)))
             .write_into(BLOCK_BASE, &mut block)
             .unwrap();
         let raw = RawBootInformation::read_from(&block).unwrap();
         let information = BootInformation::decode::<TestLayout>(&raw).unwrap();
-        assert_eq!(information.rsdp(), None);
+        assert_eq!(information.rsdp_address(), None);
     }
 
     #[test]
