@@ -6,7 +6,8 @@
 //! then answers in typed values, with `None` where the loader had nothing to
 //! say and a safe default where a code is newer than this kernel. The loader
 //! fills the block through `BootInformationBuilder`, the only other place
-//! that knows how the typed values are encoded.
+//! that knows how the typed values are encoded; the codes of the wire format
+//! are not part of the contract.
 
 #![no_std]
 
@@ -25,4 +26,4 @@ pub use framebuffer::{Framebuffer, PixelFormat};
 pub use information::{BootInformation, BootInformationError, RawBootInformation, TableTooShort};
 pub use memory_map::{EntryTooShort, MemoryKind, MemoryRegion, UefiMemoryMap};
 pub use ranges::{PhysicalRange, Table};
-pub use serial_console::{SerialConsole, SerialKind, UnknownSerialKind};
+pub use serial_console::SerialConsole;

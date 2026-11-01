@@ -34,13 +34,13 @@ impl From<Option<SerialConsole>> for RawSerialConsole {
 /// The chip behind the serial port; the discriminant is the code that
 /// travels in the wire format
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SerialKind {
+pub(crate) enum SerialKind {
     Uart16550 = 1,
     Pl011 = 2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct UnknownSerialKind(pub u32);
+pub(crate) struct UnknownSerialKind(pub(crate) u32);
 
 impl From<SerialKind> for u32 {
     fn from(kind: SerialKind) -> u32 {
