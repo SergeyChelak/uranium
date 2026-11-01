@@ -31,7 +31,8 @@ type GetInfoFunction =
 // UEFI 2.11, 13.5.2
 const FILE_MODE_READ: u64 = 1;
 
-/// Code units of a path `File::open` accepts; a longer one is rejected
+/// Code units of a path the loader makes room for on the stack; neither
+/// UEFI nor FAT limits a whole path, so the number is the loader's own choice
 const PATH_CAPACITY: usize = 255;
 
 // UEFI 2.11, 13.5.1; declared up to GetInfo, the last field the loader calls

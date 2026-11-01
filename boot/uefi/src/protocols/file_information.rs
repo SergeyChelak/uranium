@@ -10,8 +10,10 @@ pub(crate) const FILE_INFORMATION_ID: Guid = Guid::new(
     [0x8e, 0x39, 0x00, 0xa0, 0xc9, 0x69, 0x72, 0x3b],
 );
 
-/// Code units of a file name `File::size` makes room for; a longer name
-/// fails with `BUFFER_TOO_SMALL`
+// Microsoft FAT Specification, "Name Limits and Character Set for Long File Names"
+/// The longest name a FAT volume holds, in UCS-2 code units, which is the
+/// room `File::size` makes for one; a volume of another kind could still
+/// answer `BUFFER_TOO_SMALL` for a longer name
 const NAME_CAPACITY: usize = 255;
 
 // UEFI 2.11, 8.3.1; the loader reads no field of it, so only its size and
