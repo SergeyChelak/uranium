@@ -64,10 +64,10 @@ impl TryFrom<u32> for MemoryType {
 pub const PAGE_SIZE: usize = 4096;
 
 // UEFI 2.11, 7.2.1, EFI_ALLOCATE_TYPE: the values follow the C rules for an
-// enum without initializers; declared up to the kind the loader uses
+// enum without initializers; declared up to the variant the loader uses
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u32)]
-pub(crate) enum AllocateKind {
+pub(crate) enum AllocateType {
     AnyPages = 0,
 }
 
@@ -78,7 +78,7 @@ pub struct MemoryDescriptor {
     memory_type: u32,
     physical_start: u64,
     virtual_start: u64,
-    page_count: u64,
+    number_of_pages: u64,
     attribute: u64,
 }
 
@@ -91,8 +91,8 @@ impl MemoryDescriptor {
         PhysicalAddress::new(self.physical_start)
     }
 
-    pub fn page_count(&self) -> u64 {
-        self.page_count
+    pub fn number_of_pages(&self) -> u64 {
+        self.number_of_pages
     }
 }
 
@@ -158,7 +158,7 @@ impl<'a> MemoryMap<'a> {
 
 const _: () = assert!(offset_of!(MemoryDescriptor, physical_start) == 8);
 const _: () = assert!(offset_of!(MemoryDescriptor, virtual_start) == 16);
-const _: () = assert!(offset_of!(MemoryDescriptor, page_count) == 24);
+const _: () = assert!(offset_of!(MemoryDescriptor, number_of_pages) == 24);
 const _: () = assert!(offset_of!(MemoryDescriptor, attribute) == 32);
 const _: () = assert!(size_of::<MemoryDescriptor>() == 40);
 
@@ -174,12 +174,12 @@ mod tests {
     /// A descriptor wider than the structure, as a newer firmware may return
     const STRIDE: usize = size_of::<MemoryDescriptor>() + 8;
 
-    fn descriptor(memory_type: u32, physical_start: u64, page_count: u64) -> MemoryDescriptor {
+    fn descriptor(memory_type: u32, physical_start: u64, number_of_pages: u64) -> MemoryDescriptor {
         MemoryDescriptor {
             memory_type,
             physical_start,
             virtual_start: 0,
-            page_count,
+            number_of_pages,
             attribute: 0,
         }
     }
@@ -209,13 +209,13 @@ mod tests {
             descriptors[0].physical_start(),
             PhysicalAddress::new(0x1000)
         );
-        assert_eq!(descriptors[0].page_count(), 2);
+        assert_eq!(descriptors[0].number_of_pages(), 2);
         assert_eq!(descriptors[1].memory_type(), Ok(MemoryType::LoaderData));
         assert_eq!(
             descriptors[1].physical_start(),
             PhysicalAddress::new(0x8000)
         );
-        assert_eq!(descriptors[1].page_count(), 1);
+        assert_eq!(descriptors[1].number_of_pages(), 1);
         assert_eq!(map.key(), MemoryMapKey(7));
         assert_eq!(map.descriptor_size(), STRIDE);
         assert_eq!(map.descriptor_version(), 1);

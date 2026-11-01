@@ -52,7 +52,7 @@ mod tests {
     use super::*;
     use crate::program_header::{EXECUTE, READ};
     use crate::testing::{IMAGE_BASE, Image};
-    use crate::{FileType, Machine, SegmentKind};
+    use crate::{FileType, Machine, SegmentType};
 
     #[test]
     fn parses_a_minimal_header() {
@@ -146,13 +146,13 @@ mod tests {
     #[test]
     fn a_program_header_table_past_the_file_is_truncated() {
         let bytes = Image::new()
-            .segment(SegmentKind::LOAD, IMAGE_BASE, &[], 8, READ)
+            .segment(SegmentType::LOAD, IMAGE_BASE, &[], 8, READ)
             .header(|header| header.program_header_count = 3)
             .build();
         assert_eq!(ElfFile::parse(&bytes).err(), Some(ElfError::Truncated));
 
         let bytes = Image::new()
-            .segment(SegmentKind::LOAD, IMAGE_BASE, &[], 8, READ)
+            .segment(SegmentType::LOAD, IMAGE_BASE, &[], 8, READ)
             .header(|header| header.program_header_offset = u64::MAX)
             .build();
         assert_eq!(ElfFile::parse(&bytes).err(), Some(ElfError::Truncated));
@@ -162,7 +162,7 @@ mod tests {
     fn a_segment_carries_its_bytes() {
         let bytes = Image::new()
             .segment(
-                SegmentKind::LOAD,
+                SegmentType::LOAD,
                 IMAGE_BASE,
                 &[1, 2, 3],
                 0x100,
@@ -182,7 +182,7 @@ mod tests {
         }
 
         let bytes = Image::new()
-            .segment(SegmentKind::LOAD, IMAGE_BASE, &[1, 2, 3], 0x100, READ)
+            .segment(SegmentType::LOAD, IMAGE_BASE, &[1, 2, 3], 0x100, READ)
             .build();
         assert_eq!(segments_of(&bytes).count(), 1);
     }

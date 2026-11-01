@@ -4,7 +4,7 @@ use address::VirtualAddress;
 use byte_fields::Encoder;
 
 use crate::header::{RawHeader, RawIdentification};
-use crate::program_header::{RawProgramHeader, SegmentKind};
+use crate::program_header::{RawProgramHeader, SegmentType};
 
 /// Where the kernel's linker script places the image
 pub(crate) const IMAGE_BASE: u64 = 0xffff_ffff_8000_0000;
@@ -60,7 +60,7 @@ impl Image {
 
     pub(crate) fn segment(
         self,
-        kind: SegmentKind,
+        segment_type: SegmentType,
         virtual_address: u64,
         body: &[u8],
         memory_size: u64,
@@ -68,7 +68,7 @@ impl Image {
     ) -> Self {
         self.entry(
             RawProgramHeader {
-                segment_type: kind.code(),
+                segment_type: segment_type.code(),
                 flags,
                 offset: 0,
                 virtual_address: VirtualAddress::new(virtual_address),

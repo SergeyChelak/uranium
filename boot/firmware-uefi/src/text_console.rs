@@ -16,7 +16,7 @@ impl<'a> TextConsole<'a> {
 impl Console for TextConsole<'_> {
     fn write_str(&mut self, text: &str) -> Result<(), ConsoleError> {
         self.protocol
-            .write_str(text)
+            .output_string(text)
             .map_err(|status| ConsoleError::Firmware(firmware_status(status)))
     }
 }

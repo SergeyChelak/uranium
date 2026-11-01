@@ -31,7 +31,7 @@ pub use protocols::{
     File, LoadedImageProtocol, Protocol, SerialIoProtocol, SimpleFileSystemProtocol,
     SimpleTextOutputProtocol,
 };
-pub use runtime_services::{ResetKind, RuntimeServices};
+pub use runtime_services::{ResetType, RuntimeServices};
 pub use status::Status;
 pub use system_table::{SystemTable, UnexpectedSignature};
 

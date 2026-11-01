@@ -1,6 +1,6 @@
 use firmware::{ConsoleError, ExitError, FileError, Firmware, MemoryMapSummary, MemoryRegion};
 use uefi::{
-    Handle, LoadedImageProtocol, ProtocolError, ResetKind, SerialIoProtocol,
+    Handle, LoadedImageProtocol, ProtocolError, ResetType, SerialIoProtocol,
     SimpleFileSystemProtocol, Status, SystemTable,
 };
 
@@ -27,7 +27,7 @@ impl<'a> UefiFirmware<'a> {
     pub fn shutdown(self) -> ! {
         self.system_table
             .runtime_services()
-            .reset_system(ResetKind::Shutdown, Status::SUCCESS)
+            .reset_system(ResetType::Shutdown, Status::SUCCESS)
     }
 }
 

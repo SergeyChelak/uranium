@@ -1,6 +1,6 @@
 use address::VirtualAddress;
 
-use crate::{ElfError, ElfFile, FileType, Machine, Segment, SegmentKind};
+use crate::{ElfError, ElfFile, FileType, Machine, Segment, SegmentType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExecutableError<E> {
@@ -51,9 +51,9 @@ impl<'a> ExecutableFile<'a> {
         let mut entry_inside_segments = false;
         for (index, segment) in file.segments().enumerate() {
             let segment = segment?;
-            match segment.kind() {
-                SegmentKind::INTERPRETER => interpreter = Some(segment.bytes()),
-                SegmentKind::DYNAMIC => dynamic = true,
+            match segment.segment_type() {
+                SegmentType::INTERPRETER => interpreter = Some(segment.bytes()),
+                SegmentType::DYNAMIC => dynamic = true,
                 _ => {}
             }
             if !loads_memory(&segment) {
@@ -107,7 +107,7 @@ impl<'a> ExecutableFile<'a> {
 }
 
 fn loads_memory(segment: &Segment<'_>) -> bool {
-    segment.kind() == SegmentKind::LOAD && segment.memory_size() != 0
+    segment.segment_type() == SegmentType::LOAD && segment.memory_size() != 0
 }
 
 fn overlaps_an_earlier_segment(
@@ -139,15 +139,15 @@ mod tests {
         Image::new()
             .header(|header| header.entry = VirtualAddress::new(IMAGE_BASE + 0x10))
             .segment(
-                SegmentKind::LOAD,
+                SegmentType::LOAD,
                 IMAGE_BASE,
                 &[0x90; 32],
                 32,
                 READ | EXECUTE,
             )
-            .segment(SegmentKind::LOAD, IMAGE_BASE + 0x1000, &[0xaa; 8], 8, READ)
+            .segment(SegmentType::LOAD, IMAGE_BASE + 0x1000, &[0xaa; 8], 8, READ)
             .segment(
-                SegmentKind::LOAD,
+                SegmentType::LOAD,
                 IMAGE_BASE + 0x2000,
                 &[1, 2, 3],
                 0x100,
@@ -188,13 +188,13 @@ mod tests {
         let bytes = Image::new()
             .header(|header| header.entry = VirtualAddress::new(IMAGE_BASE + 0x1000))
             .segment(
-                SegmentKind::LOAD,
+                SegmentType::LOAD,
                 IMAGE_BASE + 0x1000,
                 &[0x90; 8],
                 8,
                 READ | EXECUTE,
             )
-            .segment(SegmentKind::LOAD, IMAGE_BASE, &[0xaa; 8], 8, READ)
+            .segment(SegmentType::LOAD, IMAGE_BASE, &[0xaa; 8], 8, READ)
             .build();
         let executable = executable(&bytes).unwrap();
         assert_eq!(executable.virtual_base(), VirtualAddress::new(IMAGE_BASE));
@@ -235,7 +235,7 @@ mod tests {
         struct BelowTheImage(VirtualAddress);
 
         let bytes = kernel()
-            .segment(SegmentKind::LOAD, 0x40_0000, &[0; 4], 4, READ)
+            .segment(SegmentType::LOAD, 0x40_0000, &[0; 4], 4, READ)
             .build();
         let above_the_image = |segment: &Segment<'_>| {
             if segment.virtual_address() < VirtualAddress::new(IMAGE_BASE) {
@@ -260,7 +260,7 @@ mod tests {
     fn rejects_overlapping_segments() {
         let bytes = kernel()
             .segment(
-                SegmentKind::LOAD,
+                SegmentType::LOAD,
                 IMAGE_BASE + 0x10,
                 &[0; 4],
                 4,
@@ -274,7 +274,7 @@ mod tests {
 
         let adjacent = kernel()
             .segment(
-                SegmentKind::LOAD,
+                SegmentType::LOAD,
                 IMAGE_BASE + 0x20,
                 &[0; 4],
                 4,
@@ -304,7 +304,7 @@ mod tests {
     #[test]
     fn a_segment_of_no_memory_is_left_out() {
         let bytes = kernel()
-            .segment(SegmentKind::LOAD, IMAGE_BASE + 0x10, &[], 0, READ | WRITE)
+            .segment(SegmentType::LOAD, IMAGE_BASE + 0x10, &[], 0, READ | WRITE)
             .build();
         let executable = executable(&bytes).unwrap();
         assert_eq!(loadable_segments(&executable).len(), 3);
@@ -339,9 +339,9 @@ mod tests {
     #[test]
     fn reports_interpreter_and_dynamic_table() {
         let bytes = kernel()
-            .segment(SegmentKind::INTERPRETER, 0, b"/ld.so\0", 7, READ)
+            .segment(SegmentType::INTERPRETER, 0, b"/ld.so\0", 7, READ)
             .segment(
-                SegmentKind::DYNAMIC,
+                SegmentType::DYNAMIC,
                 IMAGE_BASE + 0x3000,
                 &[0; 16],
                 16,

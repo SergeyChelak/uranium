@@ -82,7 +82,7 @@ fn convert_all(
 fn convert(descriptor: &MemoryDescriptor) -> MemoryRegion {
     MemoryRegion {
         base: descriptor.physical_start(),
-        page_count: descriptor.page_count(),
+        page_count: descriptor.number_of_pages(),
         kind: kind_of(descriptor.memory_type()),
     }
 }

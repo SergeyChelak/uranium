@@ -82,9 +82,9 @@ impl<'a> ProgramHeaderTable<'a> {
 /// The `p_type` code; any code is a value, because the specification leaves
 /// ranges to operating systems and processors
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SegmentKind(u32);
+pub struct SegmentType(u32);
 
-impl SegmentKind {
+impl SegmentType {
     // ELF-64 1.5 Draft 2, Table 16
     pub const NULL: Self = Self(0);
     pub const LOAD: Self = Self(1);
@@ -101,7 +101,7 @@ impl SegmentKind {
 /// For a loadable segment the memory beyond the bytes of the file is zero
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Segment<'a> {
-    kind: SegmentKind,
+    segment_type: SegmentType,
     virtual_address: VirtualAddress,
     end: VirtualAddress,
     bytes: &'a [u8],
@@ -119,12 +119,12 @@ impl<'a> Segment<'a> {
             .virtual_address
             .checked_add(raw.memory_size)
             .ok_or(ElfError::MemoryPastAddressSpace)?;
-        let kind = SegmentKind(raw.segment_type);
-        if kind == SegmentKind::LOAD && raw.memory_size < raw.file_size {
+        let segment_type = SegmentType(raw.segment_type);
+        if segment_type == SegmentType::LOAD && raw.memory_size < raw.file_size {
             return Err(ElfError::MemorySmallerThanFile);
         }
         Ok(Self {
-            kind,
+            segment_type,
             virtual_address: raw.virtual_address,
             end,
             bytes,
@@ -136,8 +136,8 @@ impl<'a> Segment<'a> {
         })
     }
 
-    pub fn kind(&self) -> SegmentKind {
-        self.kind
+    pub fn segment_type(&self) -> SegmentType {
+        self.segment_type
     }
 
     pub fn virtual_address(&self) -> VirtualAddress {
@@ -192,14 +192,14 @@ mod tests {
     #[test]
     fn segments_report_every_kind() {
         let bytes = Image::new()
-            .segment(SegmentKind::INTERPRETER, 0, b"ld.\0", 4, READ)
-            .segment(SegmentKind::LOAD, IMAGE_BASE, &[0x90; 4], 4, READ | EXECUTE)
+            .segment(SegmentType::INTERPRETER, 0, b"ld.\0", 4, READ)
+            .segment(SegmentType::LOAD, IMAGE_BASE, &[0x90; 4], 4, READ | EXECUTE)
             .build();
         assert_eq!(
             segments(&bytes),
             [
                 Ok(Segment {
-                    kind: SegmentKind::INTERPRETER,
+                    segment_type: SegmentType::INTERPRETER,
                     virtual_address: VirtualAddress::new(0),
                     end: VirtualAddress::new(4),
                     bytes: b"ld.\0",
@@ -210,7 +210,7 @@ mod tests {
                     executable: false,
                 }),
                 Ok(Segment {
-                    kind: SegmentKind::LOAD,
+                    segment_type: SegmentType::LOAD,
                     virtual_address: VirtualAddress::new(IMAGE_BASE),
                     end: VirtualAddress::new(IMAGE_BASE + 4),
                     bytes: &[0x90; 4],
@@ -238,7 +238,7 @@ mod tests {
         });
         let bytes = stack.build();
         let segment = segments(&bytes).remove(0).unwrap();
-        assert_eq!(segment.kind().code(), 0x6474_e551);
+        assert_eq!(segment.segment_type().code(), 0x6474_e551);
         assert_eq!(segment.alignment(), 16);
     }
 
@@ -246,7 +246,7 @@ mod tests {
     fn segment_flags_become_permissions() {
         let bytes = Image::new()
             .segment(
-                SegmentKind::LOAD,
+                SegmentType::LOAD,
                 IMAGE_BASE,
                 &[1, 2, 3, 4],
                 16,
@@ -263,8 +263,8 @@ mod tests {
     fn segments_are_read_by_entry_size() {
         let bytes = Image::new()
             .header(|header| header.program_header_entry_size = 64)
-            .segment(SegmentKind::LOAD, IMAGE_BASE, &[1, 2], 2, READ)
-            .segment(SegmentKind::LOAD, IMAGE_BASE + 0x1000, &[3, 4], 2, READ)
+            .segment(SegmentType::LOAD, IMAGE_BASE, &[1, 2], 2, READ)
+            .segment(SegmentType::LOAD, IMAGE_BASE + 0x1000, &[3, 4], 2, READ)
             .build();
         let bodies: Vec<&[u8]> = segments(&bytes)
             .into_iter()
@@ -276,7 +276,7 @@ mod tests {
     #[test]
     fn a_file_cut_inside_a_segment_is_truncated() {
         let mut bytes = Image::new()
-            .segment(SegmentKind::NOTE, 0, &[0u8; 16], 16, READ)
+            .segment(SegmentType::NOTE, 0, &[0u8; 16], 16, READ)
             .build();
         bytes.truncate(bytes.len() - 8);
         assert_eq!(segments(&bytes), [Err(ElfError::Truncated)]);
@@ -285,7 +285,7 @@ mod tests {
     #[test]
     fn memory_smaller_than_the_file_image_is_an_error() {
         let bytes = Image::new()
-            .segment(SegmentKind::LOAD, IMAGE_BASE, &[0u8; 8], 4, READ)
+            .segment(SegmentType::LOAD, IMAGE_BASE, &[0u8; 8], 4, READ)
             .build();
         assert_eq!(segments(&bytes), [Err(ElfError::MemorySmallerThanFile)]);
     }
@@ -293,7 +293,7 @@ mod tests {
     #[test]
     fn memory_past_the_end_of_the_address_space_is_an_error() {
         let bytes = Image::new()
-            .segment(SegmentKind::LOAD, u64::MAX - 7, &[0u8; 8], 16, READ)
+            .segment(SegmentType::LOAD, u64::MAX - 7, &[0u8; 8], 16, READ)
             .build();
         assert_eq!(segments(&bytes), [Err(ElfError::MemoryPastAddressSpace)]);
     }
@@ -301,7 +301,7 @@ mod tests {
     #[test]
     fn memory_past_the_end_of_the_address_space_is_an_error_for_every_kind() {
         let bytes = Image::new()
-            .segment(SegmentKind::NOTE, u64::MAX - 7, &[], 16, READ)
+            .segment(SegmentType::NOTE, u64::MAX - 7, &[], 16, READ)
             .build();
         assert_eq!(segments(&bytes), [Err(ElfError::MemoryPastAddressSpace)]);
     }
@@ -309,7 +309,7 @@ mod tests {
     #[test]
     fn a_segment_contains_its_memory_and_not_the_address_after_it() {
         let bytes = Image::new()
-            .segment(SegmentKind::LOAD, IMAGE_BASE, &[0u8; 8], 16, READ)
+            .segment(SegmentType::LOAD, IMAGE_BASE, &[0u8; 8], 16, READ)
             .build();
         let segment = segments(&bytes).remove(0).unwrap();
         assert_eq!(segment.end(), VirtualAddress::new(IMAGE_BASE + 16));

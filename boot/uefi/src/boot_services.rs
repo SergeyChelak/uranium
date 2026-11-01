@@ -5,12 +5,12 @@ use core::ptr;
 use address::PhysicalAddress;
 
 use crate::firmware_pointer::{UnusedFirmwarePointer, UnusedFunctionPointer};
-use crate::memory::{AllocateKind, MemoryMap, MemoryMapKey, MemoryType};
+use crate::memory::{AllocateType, MemoryMap, MemoryMapKey, MemoryType};
 use crate::{Guid, Handle, MemoryMapError, Protocol, ProtocolError, Status, TableHeader};
 
 // UEFI 2.11, 7.2.1
 type AllocatePagesFunction =
-    unsafe extern "efiapi" fn(AllocateKind, MemoryType, usize, *mut u64) -> Status;
+    unsafe extern "efiapi" fn(AllocateType, MemoryType, usize, *mut u64) -> Status;
 
 // UEFI 2.11, 7.2.2
 type FreePagesFunction = unsafe extern "efiapi" fn(u64, usize) -> Status;
@@ -93,7 +93,7 @@ impl BootServices {
         let mut memory = 0;
         // SAFETY: `self` lives in the boot services table, valid while boot
         // services run; `memory` outlives the call
-        unsafe { (self.allocate_pages)(AllocateKind::AnyPages, memory_type, count, &mut memory) }
+        unsafe { (self.allocate_pages)(AllocateType::AnyPages, memory_type, count, &mut memory) }
             .into_result()?;
         Ok(PhysicalAddress::new(memory))
     }
@@ -230,7 +230,7 @@ pub(crate) mod testing {
 #[cfg(test)]
 mod tests {
     use super::{
-        AllocateKind, AllocatePagesFunction, BootServices, ExitBootServicesFunction,
+        AllocatePagesFunction, AllocateType, BootServices, ExitBootServicesFunction,
         FreePagesFunction, GetMemoryMapFunction, HandleProtocolFunction, LocateProtocolFunction,
         StallFunction,
     };
@@ -302,12 +302,15 @@ mod tests {
     }
 
     unsafe extern "efiapi" fn allocate_three_loader_pages(
-        kind: AllocateKind,
+        allocate_type: AllocateType,
         memory_type: MemoryType,
         count: usize,
         memory: *mut u64,
     ) -> Status {
-        if kind != AllocateKind::AnyPages || memory_type != MemoryType::LoaderData || count != 3 {
+        if allocate_type != AllocateType::AnyPages
+            || memory_type != MemoryType::LoaderData
+            || count != 3
+        {
             return Status::INVALID_PARAMETER;
         }
         // SAFETY: the test passes a live out-pointer
@@ -316,7 +319,7 @@ mod tests {
     }
 
     unsafe extern "efiapi" fn refuse_allocation(
-        _kind: AllocateKind,
+        _allocate_type: AllocateType,
         _memory_type: MemoryType,
         _count: usize,
         _memory: *mut u64,

@@ -16,7 +16,7 @@ pub struct SimpleTextOutputProtocol {
 }
 
 impl SimpleTextOutputProtocol {
-    pub fn write_str(&self, text: &str) -> Result<(), Status> {
+    pub fn output_string(&self, text: &str) -> Result<(), Status> {
         let mut encoder = Encoder::new(text);
         let mut buffer = [0; CHUNK_LENGTH + 1];
         while encoder.next_chunk(&mut buffer).is_some() {

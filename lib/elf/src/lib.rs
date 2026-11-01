@@ -13,7 +13,7 @@ pub(crate) mod testing;
 pub use elf_file::ElfFile;
 pub use executable_file::{ExecutableError, ExecutableFile};
 pub use header::{FileType, Header, Machine};
-pub use program_header::{Segment, SegmentKind};
+pub use program_header::{Segment, SegmentType};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ElfError {
