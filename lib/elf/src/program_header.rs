@@ -103,15 +103,14 @@ impl SegmentKind {
     }
 }
 
-/// One entry of the program header table: `file_size` bytes at `offset` in
-/// the file describe `memory_size` bytes at `virtual_address`; for a
-/// loadable segment the bytes beyond the file's are zero
+/// One entry of the program header table: the bytes the file holds for it
+/// describe `memory_size` bytes at `virtual_address`; for a loadable segment
+/// the memory beyond those bytes is zero
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Segment {
+pub struct Segment<'a> {
     kind: SegmentKind,
     virtual_address: VirtualAddress,
-    offset: u64,
-    file_size: u64,
+    bytes: &'a [u8],
     memory_size: u64,
     alignment: u64,
     readable: bool,
@@ -119,12 +118,12 @@ pub struct Segment {
     executable: bool,
 }
 
-impl Segment {
+impl<'a> Segment<'a> {
     /// Reads an entry of `file`: its bytes must lie within the file, its
     /// memory must fit the address space, and a loadable segment's memory
     /// must hold its bytes
-    pub(crate) fn from_raw(raw: &RawProgramHeader, file: Fields<'_>) -> Result<Self, ElfError> {
-        file.window(raw.offset, raw.file_size)?;
+    pub(crate) fn from_raw(raw: &RawProgramHeader, file: Fields<'a>) -> Result<Self, ElfError> {
+        let bytes = file.window(raw.offset, raw.file_size)?.bytes();
         if raw.virtual_address.checked_add(raw.memory_size).is_none() {
             return Err(ElfError::MemoryPastAddressSpace);
         }
@@ -135,8 +134,7 @@ impl Segment {
         Ok(Self {
             kind,
             virtual_address: raw.virtual_address,
-            offset: raw.offset,
-            file_size: raw.file_size,
+            bytes,
             memory_size: raw.memory_size,
             alignment: raw.alignment,
             readable: raw.flags & READ != 0,
@@ -153,12 +151,9 @@ impl Segment {
         self.virtual_address
     }
 
-    pub fn offset(&self) -> u64 {
-        self.offset
-    }
-
-    pub fn file_size(&self) -> u64 {
-        self.file_size
+    /// The bytes the file holds for the segment
+    pub fn bytes(&self) -> &'a [u8] {
+        self.bytes
     }
 
     pub fn memory_size(&self) -> u64 {
@@ -199,7 +194,7 @@ mod tests {
     use crate::ElfFile;
     use crate::testing::{IMAGE_BASE, Image};
 
-    fn segments(bytes: &[u8]) -> Vec<Result<Segment, ElfError>> {
+    fn segments(bytes: &[u8]) -> Vec<Result<Segment<'_>, ElfError>> {
         ElfFile::parse(bytes).unwrap().segments().collect()
     }
 
@@ -215,8 +210,7 @@ mod tests {
                 Ok(Segment {
                     kind: SegmentKind::INTERPRETER,
                     virtual_address: VirtualAddress::new(0),
-                    offset: 176,
-                    file_size: 4,
+                    bytes: b"ld.\0",
                     memory_size: 4,
                     alignment: 0x1000,
                     readable: true,
@@ -226,8 +220,7 @@ mod tests {
                 Ok(Segment {
                     kind: SegmentKind::LOAD,
                     virtual_address: VirtualAddress::new(IMAGE_BASE),
-                    offset: 180,
-                    file_size: 4,
+                    bytes: &[0x90; 4],
                     memory_size: 4,
                     alignment: 0x1000,
                     readable: true,
@@ -250,7 +243,8 @@ mod tests {
             memory_size: 0,
             alignment: 16,
         });
-        let segment = segments(&stack.build()).remove(0).unwrap();
+        let bytes = stack.build();
+        let segment = segments(&bytes).remove(0).unwrap();
         assert_eq!(segment.kind().code(), 0x6474_e551);
         assert_eq!(segment.alignment(), 16);
     }
@@ -268,7 +262,8 @@ mod tests {
             .build();
         let segment = segments(&bytes).remove(0).unwrap();
         assert!(segment.is_readable() && segment.is_writable() && !segment.is_executable());
-        assert_eq!((segment.file_size(), segment.memory_size()), (4, 16));
+        assert_eq!(segment.bytes(), [1, 2, 3, 4]);
+        assert_eq!(segment.memory_size(), 16);
     }
 
     #[test]
@@ -278,11 +273,11 @@ mod tests {
             .segment(SegmentKind::LOAD, IMAGE_BASE, &[1, 2], 2, READ)
             .segment(SegmentKind::LOAD, IMAGE_BASE + 0x1000, &[3, 4], 2, READ)
             .build();
-        let offsets: Vec<u64> = segments(&bytes)
+        let bodies: Vec<&[u8]> = segments(&bytes)
             .into_iter()
-            .map(|segment| segment.unwrap().offset())
+            .map(|segment| segment.unwrap().bytes())
             .collect();
-        assert_eq!(offsets, [192, 194]);
+        assert_eq!(bodies, [[1, 2], [3, 4]]);
     }
 
     #[test]

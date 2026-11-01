@@ -42,20 +42,11 @@ impl<'a> ElfFile<'a> {
 
     /// Every entry of the program header table, in table order; an entry
     /// whose bytes reach past the file is an error in its place
-    pub fn segments(&self) -> impl Iterator<Item = Result<Segment, ElfError>> + use<'a> {
+    pub fn segments(&self) -> impl Iterator<Item = Result<Segment<'a>, ElfError>> + use<'a> {
         let file = Fields::new(self.bytes);
         self.program_headers
             .entries()
             .map(move |raw| Segment::from_raw(&raw?, file))
-    }
-
-    /// The bytes the file holds for `segment`; a loadable segment's memory
-    /// beyond them is zero
-    pub fn segment_bytes(&self, segment: &Segment) -> &'a [u8] {
-        Fields::new(self.bytes)
-            .window(segment.offset(), segment.file_size())
-            .expect("a segment of this file lies within it")
-            .bytes()
     }
 }
 
@@ -173,7 +164,7 @@ mod tests {
     }
 
     #[test]
-    fn segment_bytes_are_the_file_bytes() {
+    fn a_segment_carries_its_bytes() {
         let bytes = Image::new()
             .segment(
                 SegmentKind::LOAD,
@@ -185,12 +176,12 @@ mod tests {
             .build();
         let file = ElfFile::parse(&bytes).unwrap();
         let segment = file.segments().next().unwrap().unwrap();
-        assert_eq!(file.segment_bytes(&segment), [1, 2, 3]);
+        assert_eq!(segment.bytes(), [1, 2, 3]);
     }
 
     #[test]
     fn segments_borrow_the_bytes_not_the_file() {
-        fn segments_of(bytes: &[u8]) -> impl Iterator<Item = Result<Segment, ElfError>> {
+        fn segments_of(bytes: &[u8]) -> impl Iterator<Item = Result<Segment<'_>, ElfError>> {
             let file = ElfFile::parse(bytes).unwrap();
             file.segments()
         }

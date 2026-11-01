@@ -44,7 +44,7 @@ impl<'a> ExecutableFile<'a> {
     pub fn new<E>(
         file: ElfFile<'a>,
         machine: Machine,
-        placement: impl Fn(&Segment) -> Result<(), E>,
+        placement: impl Fn(&Segment<'_>) -> Result<(), E>,
     ) -> Result<Self, ExecutableError<E>> {
         let header = file.header();
         if header.file_type != FileType::EXECUTABLE {
@@ -84,14 +84,8 @@ impl<'a> ExecutableFile<'a> {
     }
 
     /// The loadable segments that occupy memory, in file order
-    pub fn segments(&self) -> impl Iterator<Item = Segment> + use<'a> {
+    pub fn segments(&self) -> impl Iterator<Item = Segment<'a>> + use<'a> {
         self.entries().filter(loads_memory)
-    }
-
-    /// The bytes the file holds for `segment`; the rest of its memory is
-    /// zero
-    pub fn segment_bytes(&self, segment: &Segment) -> &'a [u8] {
-        self.file.segment_bytes(segment)
     }
 
     /// The path of the program interpreter, as the file holds it with its
@@ -99,7 +93,7 @@ impl<'a> ExecutableFile<'a> {
     pub fn interpreter(&self) -> Option<&'a [u8]> {
         self.entries()
             .find(|segment| segment.kind() == SegmentKind::INTERPRETER)
-            .map(|segment| self.file.segment_bytes(&segment))
+            .map(|segment| segment.bytes())
     }
 
     /// Whether the file carries a dynamic linking table
@@ -110,7 +104,7 @@ impl<'a> ExecutableFile<'a> {
 
     /// Every entry of the program header table; `new` read each of them
     /// once already, so none can fail now
-    fn entries(&self) -> impl Iterator<Item = Segment> + use<'a> {
+    fn entries(&self) -> impl Iterator<Item = Segment<'a>> + use<'a> {
         self.file
             .segments()
             .map(|segment| segment.expect("every entry was read when the executable was made"))
@@ -118,7 +112,7 @@ impl<'a> ExecutableFile<'a> {
 }
 
 /// Whether an entry is a loadable segment with memory to load into
-fn loads_memory(segment: &Segment) -> bool {
+fn loads_memory(segment: &Segment<'_>) -> bool {
     segment.kind() == SegmentKind::LOAD && segment.memory_size() != 0
 }
 
@@ -127,7 +121,7 @@ fn loads_memory(segment: &Segment) -> bool {
 fn overlaps_an_earlier_segment(
     file: &ElfFile<'_>,
     index: usize,
-    segment: &Segment,
+    segment: &Segment<'_>,
 ) -> Result<bool, ElfError> {
     for earlier in file.segments().take(index) {
         let earlier = earlier?;
@@ -171,7 +165,7 @@ mod tests {
             )
     }
 
-    fn anywhere(_: &Segment) -> Result<(), ()> {
+    fn anywhere(_: &Segment<'_>) -> Result<(), ()> {
         Ok(())
     }
 
@@ -187,8 +181,8 @@ mod tests {
         assert_eq!(executable.virtual_base(), VirtualAddress::new(IMAGE_BASE));
         let segments: Vec<Segment> = executable.segments().collect();
         assert_eq!(segments.len(), 3);
-        assert_eq!(executable.segment_bytes(&segments[1]), [0xaa; 8]);
-        assert_eq!(executable.segment_bytes(&segments[2]), [1, 2, 3]);
+        assert_eq!(segments[1].bytes(), [0xaa; 8]);
+        assert_eq!(segments[2].bytes(), [1, 2, 3]);
         assert_eq!(segments[2].memory_size(), 0x100);
         assert!(segments[2].is_writable() && !segments[2].is_executable());
         assert_eq!(executable.interpreter(), None);
@@ -232,7 +226,7 @@ mod tests {
         let bytes = kernel()
             .segment(SegmentKind::LOAD, 0x40_0000, &[0; 4], 4, READ)
             .build();
-        let above_the_image = |segment: &Segment| {
+        let above_the_image = |segment: &Segment<'_>| {
             if segment.virtual_address() < VirtualAddress::new(IMAGE_BASE) {
                 Err(BelowTheImage(segment.virtual_address()))
             } else {
@@ -307,7 +301,7 @@ mod tests {
 
     #[test]
     fn segments_borrow_the_bytes_not_the_executable() {
-        fn segments_of(bytes: &[u8]) -> impl Iterator<Item = Segment> {
+        fn segments_of(bytes: &[u8]) -> impl Iterator<Item = Segment<'_>> {
             let executable = executable(bytes).unwrap();
             executable.segments()
         }
